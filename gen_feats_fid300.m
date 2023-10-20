@@ -1,9 +1,12 @@
 function gen_feats_fid300(db_ind)
+
 imscale = 0.5;
 
 if nargin<1
   db_ind = 2;
 end
+
+addpath('./utils_custom');
 
 [db_attr, ~, dbname] = get_db_attrs('fid300', db_ind);
 

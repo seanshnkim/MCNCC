@@ -1,5 +1,5 @@
 function db = generate_db_CNNfeats(net, data)
-% assume the network's last variable (x) is the features
+% assume the networks last variable (x) is the features
 % if x is HxWxKxN, then there are H*W number of patches for each data point
 
 net.mode = 'test';

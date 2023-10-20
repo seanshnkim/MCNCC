@@ -1,7 +1,7 @@
 function db = generate_db_CNNfeats_gpu(net, data)
 % identical to generate_db_CNNfeats, but leaves results on the GPU
 %
-% assume the network's last variable (x) is the features
+% assume the networks last variable (x) is the features
 % if x is HxWxKxN, then there are H*W number of patches for each data point
 
 net.mode = 'test';
