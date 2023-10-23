@@ -4,6 +4,10 @@ from scipy.ndimage import binary_erosion, rotate
 from scipy.io import loadmat, savemat
 from skimage.transform import resize
 import os
+from utils_custom.get_db_attrs import get_db_attrs 
+import pickle
+
+from modified_network import ModifiedNetwork
 
 def alignment_search_eval_fid300(p_inds, db_ind=2):
     imscale = 0.5
@@ -11,9 +15,15 @@ def alignment_search_eval_fid300(p_inds, db_ind=2):
 
     db_attr, db_chunks, dbname = get_db_attrs('fid300', db_ind)
 
-    net = load_and_modify_network(db_ind, db_attr)  # Assuming this function is defined
+    net = ModifiedNetwork(db_ind=2, db_attr=db_attr)
 
-    mean_im_pix = loadmat(os.path.join('results', 'latent_ims_mean_pix.mat'))['mean_im_pix']
+    # mean_im_pix = loadmat(os.path.join('results', 'latent_ims_mean_pix.mat'))['mean_im_pix']
+    # Load pickle file
+    save_dir = os.path.join('feats', dbname)
+    file_path = os.path.join(save_dir, 'fid300_001.pkl')
+    
+    with open(file_path 'rb') as f:
+        mean_im_pix = pickle.load(f)
 
     # ... (loading and processing db_feats as in your MATLAB code)
 

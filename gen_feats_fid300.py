@@ -3,41 +3,10 @@ import cv2
 import os
 from scipy.io import savemat
 from utils_custom.get_db_attrs import get_db_attrs
+from generate_db_CNNfeats import generate_db_CNNfeats
+import pickle
 
-import torch
-import torch.nn as nn
-from torchvision import models
-
-
-# Load and modify network
-class ModifiedNetwork(nn.Module):
-    def __init__(self, db_ind, db_attr):
-        super(ModifiedNetwork, self).__init__()
-        
-        if db_ind == 0:
-            # Add identity layer (equivalent operation in PyTorch)
-            self.layer = nn.Conv2d(in_channels=3, out_channels=1, kernel_size=1, stride=1, padding=0, bias=False)
-            self.layer.weight.data = torch.tensor([[[[1]], [[0]], [[0]]]], dtype=torch.float32)
-        else:
-            # Load pre-trained model and modify it
-            # model_path = os.path.join('models', db_attr[2])
-            # pre_trained_model = torch.load(model_path)
-            #REVIEW - 현재로서는 모델 파일 자체를 불러올 게 아니라 그냥 torchvision에서 다운로드받자
-            pretrained_model = models.resnet50(pretrained=True)
-            
-            # Remove layers after the specified index
-            layer_index = db_attr[0]  # You might need to adjust how you get this index based on the actual attribute
-            modified_pretrained_layers = list(pretrained_model.children())[:layer_index]
-            self.model = nn.Sequential(*modified_pretrained_layers)
-            
-    def forward(self, x):
-        if hasattr(self, 'layer'):
-            return self.layer(x)
-        else:
-            return self.model(x)
-
-# You can now instantiate and use ModifiedNetwork by passing the appropriate db_ind and db_attr
-
+from modified_network import ModifiedNetwork
 
 
 def gen_feats_fid300(db_ind=2):
@@ -108,17 +77,44 @@ def gen_feats_fid300(db_ind=2):
             id += 1
             treadids[p] = id
 
-    # net = load_modify_network(db_ind, db_attr)  # You should define load_modify_network function
+    # net = load_modify_network(db_ind, db_attr)  
     net = ModifiedNetwork(db_ind=2, db_attr=db_attr)
     
+    #REVIEW In this case, net.vars(1).name is same as 'data'
+    ims_transposed = ims.transpose(0, 2, 1, 3)
+    all_db_feats = generate_db_CNNfeats(net, ims_transposed)  
+    all_db_labels = treadids.reshape(1, 1, 1, -1)
+
     
-    all_db_feats, all_db_labels = generate_db(net, ims, treadids)  # You should define generate_db function
+    # feat_idx = 27
+    feat_dims = all_db_feats.shape
+    # rfsIm = ...
+    
+    # Creating a directory
+    output_dir = os.path.join('feats', dbname)
+    os.makedirs(output_dir, exist_ok=True)
 
-    save_features(dbname, all_db_feats, all_db_labels)  # You should define save_features function
-
-
-# You may need to define or modify the following functions based on your specific needs and libraries:
-# - get_db_attrs
-# - load_modify_network
-# - generate_db
-# - save_features
+    # Saving variables
+    for i in range(all_db_feats.shape[3]):
+        db_feats = all_db_feats[:, :, :, i]
+        db_labels = all_db_labels[:, :, :, i]
+        
+        # Saving the first index with additional variables
+        if i == 0:
+            file_path = os.path.join(output_dir, 'fid300_001.pkl')
+            with open(file_path, 'wb') as file:
+                pickle.dump({
+                    'db_feats': db_feats,
+                    'db_labels': db_labels,
+                    'feat_dims': feat_dims,
+                    # 'rfsIm': rfsIm,
+                    # 'trace_H': trace_H,
+                    # 'trace_W': trace_W
+                }, file)
+        else:
+            file_path = os.path.join(output_dir, f'fid300_{i+1:03d}.pkl')
+            with open(file_path, 'wb') as file:
+                pickle.dump({
+                    'db_feats': db_feats,
+                    'db_labels': db_labels
+                }, file)

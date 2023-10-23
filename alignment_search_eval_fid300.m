@@ -9,6 +9,8 @@ if nargin<2
   db_ind = 2;
 end
 
+% To use 'utils/feat_2_image.m'
+addpath('./utils_custom');
 
 [db_attr, db_chunks, dbname] = get_db_attrs('fid300', db_ind);
 
@@ -37,7 +39,7 @@ mean_im_pix = mean_im_pix; % stupid MATLAB transparency
 db_chunk_inds = db_chunks{1};
 load(fullfile('feats', dbname, 'fid300_001.mat'), ...
   'db_feats', 'feat_dims', 'rfsIm', 'trace_H', 'trace_W')
-feat_dims = feat_dims; % stupid MATLAB transparency
+feat_dims = feat_dims;
 db_feats = zeros(size(db_feats, 1), size(db_feats, 2), size(db_feats, 3), ...
   numel(db_chunk_inds), 'like', db_feats);
 for i=1:numel(db_chunk_inds)

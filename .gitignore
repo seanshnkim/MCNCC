@@ -1,0 +1,4 @@
+feats
+__pycache__/gen_feats_fid300.cpython-310.pyc
+__pycache__/generate_db_CNNfeats.cpython-310.pyc
+.vscode/launch.json
