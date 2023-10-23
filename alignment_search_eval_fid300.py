@@ -22,7 +22,7 @@ def alignment_search_eval_fid300(p_inds, db_ind=2):
     save_dir = os.path.join('feats', dbname)
     file_path = os.path.join(save_dir, 'fid300_001.pkl')
     
-    with open(file_path 'rb') as f:
+    with open(file_path, 'rb') as f:
         mean_im_pix = pickle.load(f)
 
     # ... (loading and processing db_feats as in your MATLAB code)

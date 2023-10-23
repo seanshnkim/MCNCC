@@ -9,6 +9,7 @@ import pickle
 from modified_network import ModifiedNetwork
 
 
+
 def gen_feats_fid300(db_ind=2):
     imscale = 0.5
 
@@ -88,7 +89,7 @@ def gen_feats_fid300(db_ind=2):
     
     # feat_idx = 27
     feat_dims = all_db_feats.shape
-    # rfsIm = ...
+    rfsIm = ...
     
     # Creating a directory
     output_dir = os.path.join('feats', dbname)
@@ -101,8 +102,8 @@ def gen_feats_fid300(db_ind=2):
         
         # Saving the first index with additional variables
         if i == 0:
-            file_path = os.path.join(output_dir, 'fid300_001.pkl')
-            with open(file_path, 'wb') as file:
+            save_path = os.path.join(output_dir, 'fid300_001.pkl')
+            with open(save_path, 'wb') as file:
                 pickle.dump({
                     'db_feats': db_feats,
                     'db_labels': db_labels,
@@ -112,8 +113,8 @@ def gen_feats_fid300(db_ind=2):
                     # 'trace_W': trace_W
                 }, file)
         else:
-            file_path = os.path.join(output_dir, f'fid300_{i+1:03d}.pkl')
-            with open(file_path, 'wb') as file:
+            save_path = os.path.join(output_dir, f'fid300_{i+1:03d}.pkl')
+            with open(save_path, 'wb') as file:
                 pickle.dump({
                     'db_feats': db_feats,
                     'db_labels': db_labels

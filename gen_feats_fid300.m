@@ -105,7 +105,7 @@ end
 
 % generate database
 data = {net.vars(1).name, ims};
-all_db_feats = generate_db_CNNfeats(net, data);
+% all_db_feats = generate_db_CNNfeats(net, data);
 % generate labels for db
 all_db_labels = reshape(treadids, 1, 1, 1, []);
 

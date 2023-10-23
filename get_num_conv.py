@@ -16,6 +16,17 @@ def get_num_conv(model, cnt_conv=0):
     return cnt_conv
 
 
-test_net = ModifiedNetwork(db_ind=2, db_attr=None)
+def get_num_layer(model, cnt=0):
+    for layer in model.children():
+        if isinstance(layer, torch.nn.modules.container.Sequential) or \
+            isinstance(layer, torchvision.models.resnet.Bottleneck):
+            cnt = get_num_conv(layer, cnt)
+        else:
+            cnt += 1
+    return cnt
 
-print(get_num_conv(test_net))
+
+# test_net = ModifiedNetwork(db_ind=2, db_attr=None)
+# print(get_num_conv(test_net))
+test_net = ModifiedNetwork(db_ind=2, db_attr=None)
+print(get_num_layer(test_net))
