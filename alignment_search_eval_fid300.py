@@ -24,8 +24,7 @@ def alignment_search_eval_fid300(p_inds, db_ind=2):
     # load and modify network
     net = ModifiedNetwork(db_ind=2, db_attr=db_attr)
 
-    with open(sio.loadmat(os.path.join('results', 'latent_ims_mean_pix.mat'))) as f:
-        mean_im_pix = f['mean_im_pix']
+    mean_im_pix = sio.loadmat(os.path.join('results', 'latent_ims_mean_pix.mat'))
     
     # load database chunk
     db_save_dir = os.path.join('feats', dbname)
@@ -81,7 +80,8 @@ def alignment_search_eval_fid300(p_inds, db_ind=2):
             p_im = cv2.resize(p_im, (int((trace_W / p_W) * p_H), trace_W))
         
         # Subtract mean_im_pix from p_im
-        p_im = p_im.astype(np.float32) - mean_im_pix
+        # p_im = p_im.astype(np.float32) - mean_im_pix
+        
         
         p_H, p_W, p_C = p_im.shape
         

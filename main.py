@@ -6,4 +6,4 @@ from alignment_search_eval_fid300 import alignment_search_eval_fid300
 # However, in get_db_arrs.m first case starts with 0
 # gen_feats_fid300(2)
 
-alignment_search_eval_fid300([1018, 1146], db_ind=2)
+alignment_search_eval_fid300([1, 300], db_ind=2)
