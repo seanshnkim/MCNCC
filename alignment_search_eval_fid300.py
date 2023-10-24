@@ -1,13 +1,17 @@
 import torch
+import cv2
 import numpy as np
 from scipy.ndimage import binary_erosion, rotate
-from scipy.io import loadmat, savemat
-from skimage.transform import resize
+# from scipy.io import loadmat, savemat
+import scipy.io as sio
 import os
-from utils_custom.get_db_attrs import get_db_attrs 
 import pickle
+import time
 
+from utils_custom.get_db_attrs import get_db_attrs
+from utils_custom.warp_masks import warp_masks
 from modified_network import ModifiedNetwork
+from generate_db_CNNfeats_gpu import generate_db_CNNfeats_gpu
 
 def alignment_search_eval_fid300(p_inds, db_ind=2):
     imscale = 0.5
@@ -15,17 +19,32 @@ def alignment_search_eval_fid300(p_inds, db_ind=2):
 
     db_attr, db_chunks, dbname = get_db_attrs('fid300', db_ind)
 
+    # load and modify network
     net = ModifiedNetwork(db_ind=2, db_attr=db_attr)
 
-    # mean_im_pix = loadmat(os.path.join('results', 'latent_ims_mean_pix.mat'))['mean_im_pix']
-    # Load pickle file
-    save_dir = os.path.join('feats', dbname)
-    file_path = os.path.join(save_dir, 'fid300_001.pkl')
+    with open(sio.loadmat(os.path.join('results', 'latent_ims_mean_pix.mat'))) as f:
+        mean_im_pix = f['mean_im_pix']
     
-    with open(file_path, 'rb') as f:
-        mean_im_pix = pickle.load(f)
+    # load database chunk
+    db_save_dir = os.path.join('feats', dbname)
+    first_feat_path = os.path.join(db_save_dir, 'fid300_001.pkl')
+    
+    with open(first_feat_path, 'rb') as f:
+        db_feats_init, feat_dims, rfsIm, trace_H, trace_W = pickle.load(f)
+    
+    db_chunk_inds = db_chunks[0]
+    db_feats = np.zeros((db_feats_init.shape[0], db_feats_init.shape[1], 
+                     db_feats_init.shape[2], len(db_chunk_inds)), dtype=db_feats_init.dtype)
 
-    # ... (loading and processing db_feats as in your MATLAB code)
+    # Loading specified chunks of the database and filling the db_feats array
+    # for i, ind in enumerate(db_chunk_inds):
+    #     filename = os.path.join('feats', dbname, f'fid300_{ind:03d}.mat')
+    #     dat = sio.loadmat(filename)
+    #     db_feats[:, :, :, i] = dat['db_feats']
+    for i, ind in enumerate(db_chunk_inds):
+        filename = os.path.join('feats', dbname, f'fid300_{ind:03d}.pkl')
+        dat = pickle.load(filename)
+        db_feats[:, :, :, i] = dat['db_feats']
 
     radius = max(1, np.floor(min(feat_dims[1], feat_dims[2]) * erode_pct))
     se = np.ones((radius, radius))
@@ -34,14 +53,117 @@ def alignment_search_eval_fid300(p_inds, db_ind=2):
 
     # db_feats to gpu, etc. 
     
-    for p in np.reshape(p_inds, -1):
+    # p_inds = [start, end]
+    for p in range(p_inds[0], p_inds[1]+1):
         fname = os.path.join('results', dbname, f'fid300_alignment_search_ones_res_{p:04d}.mat')
         if os.path.exists(fname):
             continue
-        # ... (your lock file handling code)
+        lock_fname = fname + '.lock'
+        if os.path.exists(lock_fname):
+            continue
+        
+        fid = open(lock_fname, 'a')
+        fid.write(f'p={time.time()}')
+        
+        # Read and resize the image
+        p_im = cv2.imread(os.path.join('datasets', 'FID-300', 'tracks_cropped', f'{p:05d}.jpg'))
+        p_im = cv2.resize(p_im, (0, 0), fx=imscale, fy=imscale)
+        p_H, p_W, p_C = p_im.shape
 
-        p_im = resize(imread(os.path.join('datasets', 'FID-300', 'tracks_cropped', f'{p:05d}.jpg')), imscale)
-        # ... (resizing, padding, and other operations as in your MATLAB code)
+        # Fix latent prints are bigger than the test impressions
+        if p_H > p_W and p_H > trace_H:
+            p_im = cv2.resize(p_im, (trace_H, int((trace_H / p_H) * p_W)))
+        elif p_W >= p_H and p_W > trace_W:
+            p_im = cv2.resize(p_im, (int((trace_W / p_W) * p_H), trace_W))
+        
+        # Subtract mean_im_pix from p_im
+        p_im = p_im.astype(np.float32) - mean_im_pix
+        
+        p_H, p_W, p_C = p_im.shape
+        
+        # Pad the latent print
+        pad_H = trace_H - p_H
+        pad_W = trace_W - p_W
+
+        # Padding p_im and a logical ones matrix
+        p_im_padded = np.pad(p_im, ((pad_H, pad_H), (pad_W, pad_W)), mode='constant', constant_values=255)
+        p_mask_padded = np.pad(np.ones((p_H, p_W), dtype=bool), ((pad_H, pad_H), (pad_W, pad_W)), mode='constant', constant_values=0)
+
+        cnt = 0
+        eraseStr = ''
+
+        angles = np.arange(-20, 21, 4)  # Creating an array from -20 to 20 with a step of 4
+        transx = np.arange(1, pad_W+2, 2)  # Creating an array from 1 to pad_W+1 with a step of 2
+        transy = np.arange(1, pad_H+2, 2)  # Creating an array from 1 to pad_H+1 with a step of 2
+
+        # Initializing scores_ones with zeros
+        scores_ones = np.zeros((len(transy), len(transx), len(angles), db_feats.shape[3]), dtype=np.float32)
+        # In this code:
+
+        # np.pad() function is used to pad the array, which corresponds to the MATLAB padarray() function.
+        # np.arange() is used for creating number sequences, similar to MATLAB’s colon operator :.
+        # np.zeros() is used to initialize an array of zeros, with the shape determined by the length of transy, transx, angles, and the fourth dimension size of db_feats.
+        # The datatype np.float32 is used for creating the zero array, which corresponds to MATLAB’s 'single'.
+        # Boolean dtype (dtype=bool) is used for creating a logical ones matrix.
+
+        cnt = 0
+        eraseStr = ''
+
+        for r in range(len(angles)):
+            
+            # Rotate image and mask
+            p_im_padded_r = cv2.rotate(p_im_padded, angles[r], interpolation=cv2.INTER_CUBIC)
+            p_mask_padded_r = cv2.rotate(p_mask_padded, angles[r], interpolation=cv2.INTER_NEAREST)
+            
+            offsets_y = [0]
+            if pad_H > 1:
+                offsets_y.append(2)
+            
+            offsets_x = [0]
+            if pad_W > 1:
+                offsets_x.append(2)
+            
+            for offsetx in offsets_x:
+                for offsety in offsets_y:
+                    
+                    # This part needs the actual implementation of the function generate_db_CNNfeats_gpu
+                    p_r_feat = generate_db_CNNfeats_gpu(net, p_im_padded_r[offsety:, offsetx:, :])
+                    
+                    for j in range(p_r_feat.shape[1] - feat_dims[2] + 1):
+                        for i in range(p_r_feat.shape[0] - feat_dims[1] + 1):
+                            
+                            msg = f'{cnt}/{len(angles) * np.ceil((pad_H/2)+0.5) * np.ceil((pad_W/2)+0.5)} '
+                            if cnt % 10 == 0:
+                                print(eraseStr + msg, end='')
+                                eraseStr = '\b' * len(msg)
+                            
+                            pix_i = offsety + (i - 1) * 4
+                            pix_j = offsetx + (j - 1) * 4
+                            
+                            if pix_i + trace_H > p_mask_padded_r.shape[0] or \
+                            pix_j + trace_W > p_mask_padded_r.shape[1]:
+                                continue
+                            
+                            # The next operations are placeholders and need actual Python functions
+                            p_ijr_feat = p_r_feat[i:i+feat_dims[1], j:j+feat_dims[2], :]
+                            p_mask_ijr = p_mask_padded_r[pix_i:pix_i+trace_H, pix_j:pix_j+trace_W]
+                            
+                            p_ijr_feat_mask = warp_masks(p_mask_ijr, im_f2i, feat_dims, db_ind)  # Placeholder
+                            
+                            # Assuming radius and se are predefined
+                            p_ijr_feat_mask = cv2.copyMakeBorder(p_ijr_feat_mask, radius, radius, radius, radius, cv2.BORDER_CONSTANT, value=0)
+                            p_ijr_feat_mask = cv2.erode(p_ijr_feat_mask, se)
+                            p_ijr_feat_mask = p_ijr_feat_mask[radius:-radius, radius:-radius, :]
+                            
+                            scores_cell = weighted_masked_NCC_features(db_feats, p_ijr_feat, p_ijr_feat_mask, ones_w)  # Placeholder
+                            
+                            scores_ones[int(pix_i/2+0.5), int(pix_j/2+0.5), r, :] = scores_cell[0]
+                            cnt += 1
+
+
+
+        
+        
 
         for r in angles:
             p_im_padded_r = rotate(p_im_padded, r, mode='constant', reshape=False)

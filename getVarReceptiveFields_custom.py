@@ -20,8 +20,8 @@ def get_receptive_fields(obj):
     
     y1 = 1 - obj.padding[0]
     y2 = 1 - obj.padding[0] + ke[0] - 1
-    x1 = 1 - obj.padding[2]
-    x2 = 1 - obj.padding[2] + ke[1] - 1
+    x1 = 1 - obj.padding[1]
+    x2 = 1 - obj.padding[1] + ke[1] - 1
     
     h = y2 - y1 + 1
     w = x2 - x1 + 1

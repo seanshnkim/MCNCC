@@ -7,7 +7,7 @@ from generate_db_CNNfeats import generate_db_CNNfeats
 import pickle
 
 from modified_network import ModifiedNetwork
-
+from getVarReceptiveFields_custom import get_receptive_fields
 
 
 def gen_feats_fid300(db_ind=2):
@@ -16,6 +16,7 @@ def gen_feats_fid300(db_ind=2):
     db_attr, _, dbname = get_db_attrs('fid300', db_ind)  # You should define get_db_attrs function
 
     ims = []
+    trace_H, trace_W = 0, 0
     for i in range(1, 1176):
         im = cv2.imread(os.path.join('datasets', 'FID-300', 'references', f"{i:05d}.png"), cv2.IMREAD_GRAYSCALE)
         # only 4 shoes are 1 pixel taller (height=587)
@@ -24,15 +25,18 @@ def gen_feats_fid300(db_ind=2):
         if i in [107, 525]:
             im = cv2.flip(im, 1)
 
+        # pad to max width
         w = im.shape[1]
         pad_left = np.full((im.shape[0], (270 - w) // 2), 255, dtype=np.uint8)
         pad_right = np.full((im.shape[0], (270 - w + 1) // 2), 255, dtype=np.uint8)
         
+        if i == 1:
+            trace_H, trace_W = im.shape
         im = np.hstack((pad_left, im, pad_right))
         im = cv2.resize(im, None, fx=imscale, fy=imscale, interpolation=cv2.INTER_AREA)
-        
         ims.append(im)
 
+    # zero-center the data
     ims = np.array(ims)
     mean_im = np.mean(ims, axis=0)
     mean_im_pix = np.mean(mean_im)
@@ -89,7 +93,7 @@ def gen_feats_fid300(db_ind=2):
     
     # feat_idx = 27
     feat_dims = all_db_feats.shape
-    rfsIm = ...
+    rfsIm = get_receptive_fields(net.model[0])
     
     # Creating a directory
     output_dir = os.path.join('feats', dbname)
@@ -108,9 +112,9 @@ def gen_feats_fid300(db_ind=2):
                     'db_feats': db_feats,
                     'db_labels': db_labels,
                     'feat_dims': feat_dims,
-                    # 'rfsIm': rfsIm,
-                    # 'trace_H': trace_H,
-                    # 'trace_W': trace_W
+                    'rfsIm': rfsIm,
+                    'trace_H': trace_H,
+                    'trace_W': trace_W
                 }, file)
         else:
             save_path = os.path.join(output_dir, f'fid300_{i+1:03d}.pkl')

@@ -36,28 +36,28 @@ mean_im_pix = mean_im_pix; % stupid MATLAB transparency
 
 
 % load database chunk
-db_chunk_inds = db_chunks{1};
-load(fullfile('feats', dbname, 'fid300_001.mat'), ...
-  'db_feats', 'feat_dims', 'rfsIm', 'trace_H', 'trace_W')
-feat_dims = feat_dims;
-db_feats = zeros(size(db_feats, 1), size(db_feats, 2), size(db_feats, 3), ...
-  numel(db_chunk_inds), 'like', db_feats);
-for i=1:numel(db_chunk_inds)
-  dat = load(fullfile('feats', dbname, sprintf('fid300_%03d.mat', db_chunk_inds(i))));
-  db_feats(:,:,:, i) = dat.db_feats;
-end
+% db_chunk_inds = db_chunks{1};
+% load(fullfile('feats', dbname, 'fid300_001.mat'), ...
+%   'db_feats', 'feat_dims', 'rfsIm', 'trace_H', 'trace_W')
+% feat_dims = feat_dims;
+% db_feats = zeros(size(db_feats, 1), size(db_feats, 2), size(db_feats, 3), ...
+%   numel(db_chunk_inds), 'like', db_feats);
+% for i=1:numel(db_chunk_inds)
+%   dat = load(fullfile('feats', dbname, sprintf('fid300_%03d.mat', db_chunk_inds(i))));
+%   db_feats(:,:,:, i) = dat.db_feats;
+% end
+
+rfs = net.getVarReceptiveFields(1);
+rfsIm = rfs(end);
+
 im_f2i = feat_2_image(rfsIm);
 
-radius = max(1, floor(min(feat_dims(1), feat_dims(2))*erode_pct));
-se = strel('disk', radius, 0);
+% radius = max(1, floor(min(feat_dims(1), feat_dims(2))*erode_pct));
+% se = strel('disk', radius, 0);
 
+% ones_w = gpuArray.ones(1, 1, feat_dims(3), 'single');
 
-
-ones_w = gpuArray.ones(1, 1, feat_dims(3), 'single');
-
-
-
-db_feats = gpuArray(db_feats);
+% db_feats = gpuArray(db_feats);
 for p=reshape(p_inds, 1, [])
   fname = fullfile('results', dbname, sprintf('fid300_alignment_search_ones_res_%04d.mat', p));
   if exist(fname, 'file'), continue, end
