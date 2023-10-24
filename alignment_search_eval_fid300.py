@@ -10,6 +10,8 @@ import time
 
 from utils_custom.get_db_attrs import get_db_attrs
 from utils_custom.warp_masks import warp_masks
+from utils_custom.weighted_masked_NCC_features import weighted_masked_NCC_features
+from utils_custom.feat_2_image import feat_2_image
 from modified_network import ModifiedNetwork
 from generate_db_CNNfeats_gpu import generate_db_CNNfeats_gpu
 
@@ -45,6 +47,8 @@ def alignment_search_eval_fid300(p_inds, db_ind=2):
         filename = os.path.join('feats', dbname, f'fid300_{ind:03d}.pkl')
         dat = pickle.load(filename)
         db_feats[:, :, :, i] = dat['db_feats']
+
+    im_f2i = feat_2_image(rfsIm)
 
     radius = max(1, np.floor(min(feat_dims[1], feat_dims[2]) * erode_pct))
     se = np.ones((radius, radius))
@@ -159,19 +163,23 @@ def alignment_search_eval_fid300(p_inds, db_ind=2):
                             
                             scores_ones[int(pix_i/2+0.5), int(pix_j/2+0.5), r, :] = scores_cell[0]
                             cnt += 1
+            
+        # minsONES = max(max(max(scores_ones, [], 1), [], 2), [], 3);
+        # locaONES = bsxfun(@eq, scores_ones, minsONES);
 
-
-
+        # % save results
+        # save_results(fname, struct('scores_ones', scores_ones, ...
+        #                             'minsONES', minsONES, ...
+        #                             'locaONES', locaONES));
+        minsONES = np.max(np.max(np.max(scores_ones, axis=0), axis=0), axis=0)
+        locaONES = scores_ones == minsONES
+        np.savez(fname, scores_ones, minsONES, locaONES)
         
-        
+        # remove lockfile
+        # close fid file
+        fid.close()
+        os.remove(lock_fname)
 
-        for r in angles:
-            p_im_padded_r = rotate(p_im_padded, r, mode='constant', reshape=False)
-            p_mask_padded_r = rotate(p_mask_padded, r, mode='constant', reshape=False, order=0)
-
-            # ... (further processing and computations)
-
-            save_results(fname, {'scores_ones': scores_ones, 'minsONES': minsONES, 'locaONES': locaONES})
 
 # Some additional functions might need to be translated or imported, such as:
 # - get_db_attrs

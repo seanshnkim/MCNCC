@@ -47,6 +47,7 @@ mean_im_pix = mean_im_pix; % stupid MATLAB transparency
 %   db_feats(:,:,:, i) = dat.db_feats;
 % end
 
+% I added this (not original part)
 rfs = net.getVarReceptiveFields(1);
 rfsIm = rfs(end);
 
@@ -64,7 +65,7 @@ for p=reshape(p_inds, 1, [])
   lock_fname = [fname, '.lock'];
   if exist(lock_fname, 'file'), continue, end
   fid = fopen(lock_fname, 'w');
-  fprintf('p=%d: ', p),tic
+  fprintf('p=%d: ', p ),tic
 
   p_im = imresize(imread(fullfile('datasets', 'FID-300', 'tracks_cropped', sprintf('%05d.jpg', p))), ...
                   imscale);
