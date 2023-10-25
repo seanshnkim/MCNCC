@@ -30,10 +30,11 @@ def gen_feats_fid300(db_ind=2):
         pad_left = np.full((im.shape[0], (270 - w) // 2), 255, dtype=np.uint8)
         pad_right = np.full((im.shape[0], (270 - w + 1) // 2), 255, dtype=np.uint8)
         
-        if i == 1:
-            trace_H, trace_W = im.shape
         im = np.hstack((pad_left, im, pad_right))
         im = cv2.resize(im, None, fx=imscale, fy=imscale, interpolation=cv2.INTER_AREA)
+        
+        if i == 1:
+            trace_H, trace_W = im.shape
         ims.append(im)
 
     # zero-center the data
@@ -87,7 +88,8 @@ def gen_feats_fid300(db_ind=2):
     
     #REVIEW In this case, net.vars(1).name is same as 'data'
     ims_transposed = ims.transpose(0, 2, 1, 3)
-    all_db_feats = generate_db_CNNfeats(net, ims_transposed)  
+    all_db_feats = generate_db_CNNfeats(net, ims_transposed)
+    # all_db_labels.shape = (1, 1, 1, 1175)
     all_db_labels = treadids.reshape(1, 1, 1, -1)
 
     
@@ -99,9 +101,11 @@ def gen_feats_fid300(db_ind=2):
     output_dir = os.path.join('feats', dbname)
     os.makedirs(output_dir, exist_ok=True)
 
-    # Saving variables
-    for i in range(all_db_feats.shape[3]):
-        db_feats = all_db_feats[:, :, :, i]
+    # all_db_feats.shape = (1175, 256, 2, 1175)
+    # Therefore, all_db_feats.shape[0] should be correct
+    # for i in range(all_db_feats.shape[3]):
+    for i in range(all_db_feats.shape[0]):
+        db_feats = all_db_feats[i, :, :, :]
         db_labels = all_db_labels[:, :, :, i]
         
         # Saving the first index with additional variables
