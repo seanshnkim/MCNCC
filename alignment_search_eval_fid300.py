@@ -189,11 +189,3 @@ def alignment_search_eval_fid300(p_inds, db_ind=2):
 
         fid.close()
         os.remove(lock_fname)
-
-# Some additional functions might need to be translated or imported, such as:
-# - get_db_attrs
-# - load_and_modify_network
-# - generate_db_CNNfeats_gpu
-# - weighted_masked_NCC_features
-# - warp_masks
-# - save_results
