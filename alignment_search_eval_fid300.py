@@ -121,10 +121,7 @@ def alignment_search_eval_fid300(p_inds, db_ind=2):
         # Initializing scores_ones with zeros
         scores_ones = np.zeros((len(transy), len(transx), len(angles), db_feats.shape[3]), dtype=np.float32)
 
-        cnt = 0
-        eraseStr = ''
-
-        rows, cols = p_im_padded.shape
+        rows, cols, _ = p_im_padded.shape
         center = (cols / 2, rows / 2)
 
         for r in angles:
@@ -133,9 +130,11 @@ def alignment_search_eval_fid300(p_inds, db_ind=2):
             rot_mat_mask = cv2.getRotationMatrix2D(center, r, 1)
             
             # Rotating images
-            p_im_padded_r = cv2.warpAffine(p_im_padded, rot_mat_im, (cols, rows), flags=cv2.INTER_CUBIC, borderMode=cv2.BORDER_CONSTANT, borderValue=(255, 255, 255))
+            p_im_padded_r = cv2.warpAffine(p_im_padded, rot_mat_im, (cols, rows), \
+                flags=cv2.INTER_CUBIC, borderMode=cv2.BORDER_CONSTANT, borderValue=(255, 255, 255))
             # To prevent cv::UMat format error, we need to convert p_mask_padded to float32 numpy array
-            p_mask_padded_r = cv2.warpAffine(np.float32(p_mask_padded), rot_mat_mask, (cols, rows), flags=cv2.INTER_NEAREST, borderMode=cv2.BORDER_CONSTANT, borderValue=0)
+            p_mask_padded_r = cv2.warpAffine(np.float32(p_mask_padded), rot_mat_mask, (cols, rows), \
+                flags=cv2.INTER_NEAREST, borderMode=cv2.BORDER_CONSTANT, borderValue=0)
                     
             offsets_y = [0]
             if pad_H > 1:
