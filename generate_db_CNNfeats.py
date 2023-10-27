@@ -16,7 +16,7 @@ def generate_db_CNNfeats(model, img, batch_size=10, device='cuda'):
     # Get the data and convert it to grayscale
     # ims = gather(data{2});
     # ims = data[1].cpu().numpy() # Exception: 'numpy.ndarray' object has no attribute 'cpu'
-    gray = np.mean(img, axis=2, keepdims=True).repeat(3, axis=2)
+    gray = np.mean(img, axis=1, keepdims=True).repeat(3, axis=1)
     
     # Convert grayscale images to torch tensor and move it to the GPU
     img_gpu = torch.tensor(gray, dtype=torch.float32).to(device)

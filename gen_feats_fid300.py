@@ -86,7 +86,7 @@ def gen_feats_fid300(db_ind=2):
     # net = load_modify_network(db_ind, db_attr)  
     net = ModifiedNetwork(db_ind=2, db_attr=db_attr)
     
-    #REVIEW In this case, net.vars(1).name is same as 'data'
+    # In this case, net.vars(1).name is same as 'data'
     ims_transposed = ims.transpose(0, 2, 1, 3)
     all_db_feats = generate_db_CNNfeats(net, ims_transposed)
     # all_db_labels.shape = (1, 1, 1, 1175)

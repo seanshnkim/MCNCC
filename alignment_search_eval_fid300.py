@@ -154,8 +154,8 @@ def alignment_search_eval_fid300(p_inds, db_ind=2):
                 for offsety in offsets_y:
                     p_r_feat = generate_db_CNNfeats_gpu(net, p_im_padded_r[offsety:, offsetx:, :])
                     
-                    for j in range(p_r_feat.shape[1] - feat_dims[2] + 1):
-                        for i in range(p_r_feat.shape[0] - feat_dims[1] + 1):
+                    for j in range(p_r_feat.shape[3] - feat_dims[2] + 1):
+                        for i in range(p_r_feat.shape[2] - feat_dims[1] + 1):
                             
                             msg = f'{cnt}/{len(angles) * np.ceil((pad_H/2)+0.5) * np.ceil((pad_W/2)+0.5)} '
                             if cnt % 10 == 0:

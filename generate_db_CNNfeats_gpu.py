@@ -46,6 +46,11 @@ def generate_db_CNNfeats_gpu(model, img, batch_size=10, device='cuda'):
         feats.append(outputs)
     
     # Concatenating all the features
+    # can't convert cuda:0 device type tensor to numpy. 
+    # Use Tensor.cpu() to copy the tensor to host memory first.
+    for i in range(len(feats)):
+        feats[i] = feats[i].cpu().numpy()
     db = np.concatenate(feats, axis=0)
+    db_gpu = torch.tensor(db, dtype=torch.float32).to(device)
     
-    return db
+    return db_gpu
