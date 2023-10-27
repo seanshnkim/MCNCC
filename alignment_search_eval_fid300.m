@@ -33,8 +33,6 @@ end
 load(fullfile('results', 'latent_ims_mean_pix.mat'), 'mean_im_pix')
 mean_im_pix = mean_im_pix; % stupid MATLAB transparency
 
-
-
 % load database chunk
 db_chunk_inds = db_chunks{1};
 load(fullfile('feats', dbname, 'fid300_001.mat'), ...

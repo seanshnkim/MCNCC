@@ -123,18 +123,24 @@ def alignment_search_eval_fid300(p_inds, db_ind=2):
 
         rows, cols, _ = p_im_padded.shape
         center = (cols / 2, rows / 2)
-
+        
         for r in angles:
-            # Creating rotation matrices
-            rot_mat_im = cv2.getRotationMatrix2D(center, r, 1)
-            rot_mat_mask = cv2.getRotationMatrix2D(center, r, 1)
+            # # Creating rotation matrices
+            # rot_mat_im = cv2.getRotationMatrix2D(center, r, 1)
+            # rot_mat_mask = cv2.getRotationMatrix2D(center, r, 1)
             
-            # Rotating images
-            p_im_padded_r = cv2.warpAffine(p_im_padded, rot_mat_im, (cols, rows), \
-                flags=cv2.INTER_CUBIC, borderMode=cv2.BORDER_CONSTANT, borderValue=(255, 255, 255))
-            # To prevent cv::UMat format error, we need to convert p_mask_padded to float32 numpy array
-            p_mask_padded_r = cv2.warpAffine(np.float32(p_mask_padded), rot_mat_mask, (cols, rows), \
-                flags=cv2.INTER_NEAREST, borderMode=cv2.BORDER_CONSTANT, borderValue=0)
+            # # Rotating images
+            # p_im_padded_r = cv2.warpAffine(p_im_padded, rot_mat_im, (cols, rows), \
+            #     flags=cv2.INTER_CUBIC, borderMode=cv2.BORDER_CONSTANT, borderValue=(255, 255, 255))
+            # # To prevent cv::UMat format error, we need to convert p_mask_padded to float32 numpy array
+            # p_mask_padded_r = cv2.warpAffine(np.float32(p_mask_padded), rot_mat_mask, (cols, rows), \
+            #     flags=cv2.INTER_NEAREST, borderMode=cv2.BORDER_CONSTANT, borderValue=0)
+            
+            # Just load images created in MATLAB code for test (tentative approach)
+            p_im_padded_r = cv2.imread(os.path.join('results', 'resnet_4x_matlab', \
+                f'fid300_rotated_im_{p:04d}_{r:03d}.jpg'), cv2.IMREAD_COLOR)
+            p_mask_padded_r = cv2.imread(os.path.join('results', 'resnet_4x_matlab', \
+                f'fid300_rotated_mask_{p:04d}_{r:03d}.jpg'), cv2.IMREAD_GRAYSCALE)
                     
             offsets_y = [0]
             if pad_H > 1:

@@ -7,7 +7,7 @@ import numpy as np
 # if x is HxWxKxN, then there are H*W number of patches for each data point
 # identical to generate_db_CNNfeats, but leaves results on the GPU
 
-def generate_db_CNNfeats_gpu(model, data, batch_size=10, device='cuda'):
+def generate_db_CNNfeats_gpu(model, img, batch_size=10, device='cuda'):
     # Set the model to evaluation mode
     model.eval()
     
@@ -16,25 +16,27 @@ def generate_db_CNNfeats_gpu(model, data, batch_size=10, device='cuda'):
     
     # Get the data and convert it to grayscale
     # ims = gather(data{2});
-    ims = data[1].cpu().numpy()
+    # ims = data.cpu().numpy()
     
-    gray = np.mean(ims, axis=2, keepdims=True).repeat(3, axis=2)
+    gray = np.mean(img, axis=2, keepdims=True).repeat(3, axis=2)
+    # change into 4D array for batch_size dimension
+    gray_expanded = np.expand_dims(gray, axis=3)
     
     # Convert grayscale images to torch tensor and move it to the GPU
-    data[1] = torch.tensor(gray, dtype=torch.float32).to(device)
+    img_cpu = torch.tensor(gray_expanded, dtype=torch.float32).to(device)
     
     # Calculate the number of batches
-    num_batches = int(np.ceil(len(gray) / batch_size))
+    num_batches = int(np.ceil(gray_expanded.shape[3] / batch_size))
     
     feats = []
     # Process each batch
     for b in range(num_batches):
         left = b * batch_size
-        right = min((b + 1) * batch_size, len(gray))
+        right = min((b + 1) * batch_size, gray_expanded.shape[3])
         
         # Forward pass
         with torch.no_grad():
-            outputs = model(data[1][left:right])
+            outputs = model(img_cpu[:, :, :, left:right])
         
         # Collecting the features (responses)
         feats.append(outputs)
@@ -43,8 +45,3 @@ def generate_db_CNNfeats_gpu(model, data, batch_size=10, device='cuda'):
     db = np.concatenate(feats, axis=0)
     
     return db
-
-# Usage example:
-# model - your PyTorch model
-# data - your input data as a list where data[1] contains the image tensors
-# db = generate_db_CNNfeats(model, data)
