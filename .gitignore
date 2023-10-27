@@ -1,3 +1,6 @@
 feats
 *.pyc
 .vscode/launch.json
+__pycache__/
+*.txt
+*.asv

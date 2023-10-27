@@ -23,7 +23,8 @@ def alignment_search_eval_fid300(p_inds, db_ind=2):
     # load and modify network
     net = ModifiedNetwork(db_ind=2, db_attr=db_attr)
 
-    mean_im_pix = sio.loadmat(os.path.join('results', 'latent_ims_mean_pix.mat'))
+    mean_im_pix_dict = sio.loadmat(os.path.join('results', 'latent_ims_mean_pix.mat'))
+    mean_im_pix = mean_im_pix_dict['mean_im_pix']
     
     # load database chunk
     db_save_dir = os.path.join('feats', dbname)
@@ -90,7 +91,14 @@ def alignment_search_eval_fid300(p_inds, db_ind=2):
         
         # Subtract mean_im_pix from p_im
         # p_im = p_im.astype(np.float32) - mean_im_pix
-        p_H, p_W = p_im.shape
+        mean_im_expanded = cv2.resize(mean_im_pix, (p_im.shape[1], p_im.shape[0]), interpolation=cv2.INTER_CUBIC)
+
+        # Since p_im is a single channel image, you might want to subtract each channel of mean_im_expanded from p_im separately
+        p_im_ch1 = p_im - mean_im_expanded[:, :, 0]
+        p_im_ch2 = p_im - mean_im_expanded[:, :, 1]
+        p_im_ch3 = p_im - mean_im_expanded[:, :, 2]
+        p_im = np.stack((p_im_ch1, p_im_ch2, p_im_ch3), axis=2)
+        p_H, p_W, p_C = p_im.shape
         
         # Pad the latent print
         pad_H = trace_H - p_H
@@ -98,9 +106,11 @@ def alignment_search_eval_fid300(p_inds, db_ind=2):
         
         # Padding p_im and a logical ones matrix
         # p_im.shape = (H, W, 3) -> 3D. In MATLAB code, it is 2D.
-        p_im_padded = np.pad(p_im, ((pad_H, pad_H), (pad_W, pad_W)), mode='constant', constant_values=255)
-        p_mask_padded = np.pad(np.ones((p_H, p_W), dtype=bool), ((pad_H, pad_H), (pad_W, pad_W)), mode='constant', constant_values=0)
-
+        p_im_padded = np.pad(p_im, ((pad_H, pad_H), (pad_W, pad_W), (0,0)), \
+            mode='constant', constant_values=255)
+        p_mask_padded = np.pad(np.ones((p_H, p_W, p_C), dtype=bool), ((pad_H, pad_H), (pad_W, pad_W), \
+            (0, 0)), mode='constant', constant_values=0)
+        
         cnt = 0
         eraseStr = ''
 
