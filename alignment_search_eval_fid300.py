@@ -29,8 +29,15 @@ def load_first_feat(dbname):
 
 
 def fill_db_feats(db_feats_first, db_chunk_inds, dbname):
+    #NOTE - Load the entire db_feats
+    # if os.path.isfile(os.path.join('feats', dbname, 'fid300_all.pkl')):
+    #     with open(os.path.join('feats', dbname, 'fid300_all.pkl'), 'rb') as f:
+    #         dat = pickle.load(f)
+    #     return dat['db_feats']
+    
+    len_db_chunks = db_chunk_inds[1] - db_chunk_inds[0]
     db_feats = np.zeros((db_feats_first.shape[0], db_feats_first.shape[1], 
-                     db_feats_first.shape[2], len(db_chunk_inds)), dtype=db_feats_first.dtype)
+                     db_feats_first.shape[2], len_db_chunks), dtype=db_feats_first.dtype)
 
     # Loading specified chunks of the database and filling the db_feats array
     start_idx, end_idx = db_chunk_inds
@@ -46,14 +53,14 @@ def fill_db_feats(db_feats_first, db_chunk_inds, dbname):
 
 def preprocess_p_im(fname, imscale, trace_H, trace_W):
     p_im = cv2.imread(fname, cv2.IMREAD_GRAYSCALE)
-    p_im = cv2.resize(p_im, (0, 0), fx=imscale, fy=imscale)
-    p_H, p_W = p_im.shape
+    p_im_resized = cv2.resize(p_im, (0, 0), fx=imscale, fy=imscale)
+    p_H, p_W = p_im_resized.shape
     
     # Fix latent prints are bigger than the test impressions
     if p_H > p_W and p_H > trace_H:
-        p_im_resized = cv2.resize(p_im, (trace_H, int((trace_H / p_H) * p_W)))
+        p_im_resized = cv2.resize(p_im_resized, (trace_H, int((trace_H / p_H) * p_W)))
     elif p_W >= p_H and p_W > trace_W:
-        p_im_resized = cv2.resize(p_im, (int((trace_W / p_W) * p_H), trace_W))
+        p_im_resized = cv2.resize(p_im_resized, (int((trace_W / p_W) * p_H), trace_W))
         
     # Subtract mean_im_pix from p_im
     # p_im = p_im.astype(np.float32) - mean_im_pix
@@ -62,12 +69,10 @@ def preprocess_p_im(fname, imscale, trace_H, trace_W):
     mean_im_expanded = cv2.resize(mean_im_pix, (p_im_resized.shape[1], p_im_resized.shape[0]), interpolation=cv2.INTER_CUBIC)
 
     # Since p_im is a single channel image, you might want to subtract each channel of mean_im_expanded from p_im separately
-    ch1 = p_im_resized - mean_im_expanded[:, :, 0]
-    ch2 = p_im_resized - mean_im_expanded[:, :, 1]
-    ch3 = p_im_resized - mean_im_expanded[:, :, 2]
-    p_im_proc = np.stack((ch1, ch2, ch3), axis=2)
+    p_im_resized_exp = np.expand_dims(p_im_resized, axis=2)
+    p_im_processed = p_im_resized_exp - mean_im_expanded
     
-    return p_im_proc
+    return p_im_processed
 
 
 
@@ -140,6 +145,9 @@ def alignment_search_eval_fid300(p_inds, db_ind=2):
     # len(db_chunks) is 1175
     db_chunk_inds = db_chunks[0]
     
+    #FIXME - For debugging, use only 100 chunks
+    db_chunk_inds = (1, 101)
+    
     net = ModifiedNetwork(db_ind=2, db_attr=db_attr)
     first_feat = load_first_feat(dbname)
     
@@ -181,6 +189,7 @@ def alignment_search_eval_fid300(p_inds, db_ind=2):
         # Pad the latent print
         pad_H = trace_H - p_im.shape[0]
         pad_W = trace_W - p_im.shape[1]
+        assert pad_H >= 0 and pad_W >= 0, f'pad_H={pad_H}, pad_W={pad_W}'
         
         # Padding: p_im.shape = (H, W, 3) -> 3D. In MATLAB code, it is 2D.
         

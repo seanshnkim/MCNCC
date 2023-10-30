@@ -101,7 +101,12 @@ def gen_feats_fid300(db_ind=2):
     output_dir = os.path.join('feats', dbname)
     os.makedirs(output_dir, exist_ok=True)
 
-    # all_db_feats.shape = (1175, 256, 2, 1175)
+    # save all_db_feats
+    save_entire_path = os.path.join(output_dir, 'fid300_all.pkl')
+    with open(save_entire_path, 'wb') as file:
+        pickle.dump({'db_feats': all_db_feats}, file)
+    
+    # all_db_feats.shape = (1175, 256, X, 1175)
     # Therefore, all_db_feats.shape[0] should be correct
     # for i in range(all_db_feats.shape[3]):
     for i in range(all_db_feats.shape[0]):
