@@ -20,13 +20,17 @@ def get_db_attrs(dataset, db_ind, info=None):
     dbname = db_attr[0]
     
     if dataset.lower() == 'israeli':
-        db_chunks = [list(range(1, 388))]
+        # db_chunks = [list(range(1, 388))]
+        db_chunks = [(1, 388)]
     elif dataset.lower() == 'fid300':
-        db_chunks = [list(range(1, 1176))]
+        # db_chunks = [list(range(1, 1176))]
+        db_chunks = [(1, 1176)]
     elif dataset.lower() == 'facades':
-        db_chunks = [list(range(1, 1658))]
+        # db_chunks = [list(range(1, 1658))]
+        db_chunks = [(1, 1658)]
     elif dataset.lower() == 'maps':
-        db_chunks = [list(range(1, 1098)), list(range(1098, 2195))]
+        # db_chunks = [list(range(1, 1098)), list(range(1098, 2195))]
+        db_chunks = [(1, 1098), (1098, 2195)]
     else:
         raise ValueError(f'Dataset: {dataset} is not valid!')
     

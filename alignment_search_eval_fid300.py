@@ -33,7 +33,8 @@ def fill_db_feats(db_feats_first, db_chunk_inds, dbname):
                      db_feats_first.shape[2], len(db_chunk_inds)), dtype=db_feats_first.dtype)
 
     # Loading specified chunks of the database and filling the db_feats array
-    for i, ind in enumerate(db_chunk_inds):
+    start_idx, end_idx = db_chunk_inds
+    for i, ind in enumerate(range(start_idx, end_idx)):
         filename = os.path.join('feats', dbname, f'fid300_{ind:03d}.pkl')
         with open(filename, 'rb') as filename:
             dat = pickle.load(filename)
@@ -143,7 +144,7 @@ def alignment_search_eval_fid300(p_inds, db_ind=2):
     first_feat = load_first_feat(dbname)
     
     db_feats_first = first_feat['db_feats']
-    db_feats = fill_db_feats(db_feats_first)
+    db_feats = fill_db_feats(db_feats_first, db_chunk_inds, dbname)
     
     feat_dims = first_feat['feat_dims']
     rfsIm = first_feat['rfsIm']
