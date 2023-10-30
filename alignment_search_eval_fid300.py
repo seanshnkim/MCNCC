@@ -110,7 +110,8 @@ def return_feat_ijr(p_r_feat, first_feat, h, w, offsety, offsetx, p_mask_padded_
     
     im_f2i = feat_2_image(rfsIm)
     radius = max(1, np.floor(min(feat_dims[1], feat_dims[2]) * erode_pct))
-    se = np.ones((int(radius), int(radius)))
+    radius = int(radius)
+    se = np.ones((radius, radius))
     
     pix_i = offsety + h * 4
     pix_j = offsetx + w * 4
@@ -159,9 +160,6 @@ def alignment_search_eval_fid300(p_inds, db_ind=2):
     trace_H = first_feat['trace_H']
     trace_W = first_feat['trace_W']
 
-    im_f2i = feat_2_image(rfsIm)
-    radius = max(1, np.floor(min(feat_dims[1], feat_dims[2]) * ERODE_PCT))
-    se = np.ones((int(radius), int(radius)))
     ones_w = torch.ones((1, 1, feat_dims[3]), dtype=torch.float32).cuda()
     
     # First, 'results/<dbnmae>' path needs to be created
@@ -236,22 +234,23 @@ def alignment_search_eval_fid300(p_inds, db_ind=2):
                     h_margin = p_r_feat.shape[3] - feat_dims[3]
                     w_margin = p_r_feat.shape[2] - feat_dims[2]
 
-                    for (h, w) in zip(h_margin+1, w_margin+1):
-                        eraseStr = print_msg(cnt, angles, eraseStr, pad_H, pad_W)
-                        
-                        pix_i = offsety + h * 4
-                        pix_j = offsetx + w * 4
-                        
-                        if pix_i + trace_H > p_mask_padded_r.shape[0] or \
-                        pix_j + trace_W > p_mask_padded_r.shape[1]:
-                            continue
-                        
-                        # The next operations are placeholders and need actual Python functions
-                        p_ijr_feat, p_ijr_feat_mask = return_feat_ijr(p_r_feat, first_feat, h, w, offsety, offsetx, p_mask_padded_r, trace_H, trace_W, ERODE_PCT, db_ind)
-                        
-                        scores_cell = weighted_masked_NCC_features(db_feats, p_ijr_feat, p_ijr_feat_mask, ones_w)  # Placeholder
-                        scores_ones[int(pix_i/2+0.5), int(pix_j/2+0.5), r, :] = scores_cell[0]
-                        cnt += 1
+                    for h in range(h_margin+1):
+                        for w in range(w_margin+1):
+                            eraseStr = print_msg(cnt, angles, eraseStr, pad_H, pad_W)
+                            
+                            pix_i = offsety + h * 4
+                            pix_j = offsetx + w * 4
+                            
+                            if pix_i + trace_H > p_mask_padded_r.shape[0] or \
+                            pix_j + trace_W > p_mask_padded_r.shape[1]:
+                                continue
+                            
+                            # The next operations are placeholders and need actual Python functions
+                            p_ijr_feat, p_ijr_feat_mask = return_feat_ijr(p_r_feat, first_feat, h, w, offsety, offsetx, p_mask_padded_r, trace_H, trace_W, ERODE_PCT, db_ind)
+                            
+                            scores_cell = weighted_masked_NCC_features(db_feats, p_ijr_feat, p_ijr_feat_mask, ones_w)  # Placeholder
+                            scores_ones[int(pix_i/2+0.5), int(pix_j/2+0.5), r, :] = scores_cell[0]
+                            cnt += 1
             
         minsONES = np.max(np.max(np.max(scores_ones, axis=0), axis=0), axis=0)
         locaONES = scores_ones == minsONES
