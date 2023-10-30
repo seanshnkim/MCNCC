@@ -56,7 +56,7 @@ def alignment_search_eval_fid300(p_inds, db_ind=2):
     im_f2i = feat_2_image(rfsIm)
 
     radius = max(1, np.floor(min(feat_dims[1], feat_dims[2]) * erode_pct))
-    se = np.ones((radius, radius))
+    se = np.ones((int(radius), int(radius)))
 
     ones_w = torch.ones((1, 1, feat_dims[3]), dtype=torch.float32).cuda()
     
@@ -67,15 +67,15 @@ def alignment_search_eval_fid300(p_inds, db_ind=2):
     # p_inds = [start, end]
     for p in range(p_inds[0], p_inds[1]+1):
         fname = os.path.join('results', dbname, f'fid300_alignment_search_ones_res_{p:04d}.mat')
-        if os.path.exists(fname):
-            continue
-        lock_fname = fname + '.lock'
-        if os.path.exists(lock_fname):
-            continue
+        # if os.path.exists(fname):
+        #     continue
+        # lock_fname = fname + '.lock'
+        # if os.path.exists(lock_fname):
+        #     continue
         
         # if the file does not exist, a+ option creates it ('a' option assumes the file exists)
-        fid = open(lock_fname, 'a+')
-        fid.write(f'p={time.time()}')
+        # fid = open(lock_fname, 'a+')
+        # fid.write(f'p={time.time()}')
         
         # Read and resize the image
         # We need 2D dimension numpy array for p_im (in MATLAB code)
@@ -153,17 +153,17 @@ def alignment_search_eval_fid300(p_inds, db_ind=2):
             for offsetx in offsets_x:
                 for offsety in offsets_y:
                     p_r_feat = generate_db_CNNfeats_gpu(net, p_im_padded_r[offsety:, offsetx:, :])
-                    
-                    for j in range(p_r_feat.shape[3] - feat_dims[2] + 1):
-                        for i in range(p_r_feat.shape[2] - feat_dims[1] + 1):
+
+                    for j in range(p_r_feat.shape[3] - feat_dims[3] + 1):
+                        for i in range(p_r_feat.shape[2] - feat_dims[2] + 1):
                             
                             msg = f'{cnt}/{len(angles) * np.ceil((pad_H/2)+0.5) * np.ceil((pad_W/2)+0.5)} '
                             if cnt % 10 == 0:
                                 print(eraseStr + msg, end='')
                                 eraseStr = '\b' * len(msg)
                             
-                            pix_i = offsety + (i - 1) * 4
-                            pix_j = offsetx + (j - 1) * 4
+                            pix_i = offsety + i * 4
+                            pix_j = offsetx + j * 4
                             
                             if pix_i + trace_H > p_mask_padded_r.shape[0] or \
                             pix_j + trace_W > p_mask_padded_r.shape[1]:
@@ -187,5 +187,5 @@ def alignment_search_eval_fid300(p_inds, db_ind=2):
         locaONES = scores_ones == minsONES
         np.savez(fname, scores_ones, minsONES, locaONES)
 
-        fid.close()
-        os.remove(lock_fname)
+        # fid.close()
+        # os.remove(lock_fname)
