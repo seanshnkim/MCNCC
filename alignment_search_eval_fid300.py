@@ -14,37 +14,23 @@ from utils_custom.feat_2_image import feat_2_image
 from modified_network import ModifiedNetwork
 from generate_db_CNNfeats_gpu import generate_db_CNNfeats_gpu
 
-def alignment_search_eval_fid300(p_inds, db_ind=2):
-    imscale = 0.5
-    erode_pct = 0.1
 
-    db_attr, db_chunks, dbname = get_db_attrs('fid300', db_ind)
-
-    # load and modify network
-    net = ModifiedNetwork(db_ind=2, db_attr=db_attr)
-
-    mean_im_pix_dict = sio.loadmat(os.path.join('results', 'latent_ims_mean_pix.mat'))
-    mean_im_pix = mean_im_pix_dict['mean_im_pix']
+def load_first_feat(dbname):
+    '''pickle.load(f) returns a dictionary which has
+    db_feats, db_labels, feat_dims, rfsIm, trace_H, trace_W as keys'''
     
-    # load database chunk
-    db_save_dir = os.path.join('feats', dbname)
-    first_feat_path = os.path.join(db_save_dir, 'fid300_001.pkl')
+    first_feat_path = os.path.join(os.path.join('feats', dbname), 'fid300_001.pkl')
     
-    # pickle.load(f) returns a dictionary which has
-    # db_feats, db_labels, feat_dims, rfsIm, trace_H, trace_W as keys
     with open(first_feat_path, 'rb') as f:
         fid300_001 = pickle.load(f)
-        db_feats_init = fid300_001['db_feats']
-        feat_dims = fid300_001['feat_dims']
-        rfsIm = fid300_001['rfsIm']
-        trace_H = fid300_001['trace_H']
-        trace_W = fid300_001['trace_W']
     
-    # len(db_chunks) is 1175
-    db_chunk_inds = db_chunks[0]
-    # db_feats.shape = (1175, 256, 2, 1175)
-    db_feats = np.zeros((db_feats_init.shape[0], db_feats_init.shape[1], 
-                     db_feats_init.shape[2], len(db_chunk_inds)), dtype=db_feats_init.dtype)
+    return fid300_001
+
+
+
+def fill_db_feats(db_feats_first, db_chunk_inds, dbname):
+    db_feats = np.zeros((db_feats_first.shape[0], db_feats_first.shape[1], 
+                     db_feats_first.shape[2], len(db_chunk_inds)), dtype=db_feats_first.dtype)
 
     # Loading specified chunks of the database and filling the db_feats array
     for i, ind in enumerate(db_chunk_inds):
@@ -53,11 +39,86 @@ def alignment_search_eval_fid300(p_inds, db_ind=2):
             dat = pickle.load(filename)
         db_feats[:, :, :, i] = dat['db_feats']
 
+    return db_feats
+
+
+
+def preprocess_p_im(fname, imscale, trace_H, trace_W):
+    p_im = cv2.imread(fname, cv2.IMREAD_GRAYSCALE)
+    p_im = cv2.resize(p_im, (0, 0), fx=imscale, fy=imscale)
+    p_H, p_W = p_im.shape
+    
+    # Fix latent prints are bigger than the test impressions
+    if p_H > p_W and p_H > trace_H:
+        p_im_resized = cv2.resize(p_im, (trace_H, int((trace_H / p_H) * p_W)))
+    elif p_W >= p_H and p_W > trace_W:
+        p_im_resized = cv2.resize(p_im, (int((trace_W / p_W) * p_H), trace_W))
+        
+    # Subtract mean_im_pix from p_im
+    # p_im = p_im.astype(np.float32) - mean_im_pix
+    mean_im_pix_dict = sio.loadmat(os.path.join('results', 'latent_ims_mean_pix.mat'))
+    mean_im_pix = mean_im_pix_dict['mean_im_pix']
+    mean_im_expanded = cv2.resize(mean_im_pix, (p_im_resized.shape[1], p_im_resized.shape[0]), interpolation=cv2.INTER_CUBIC)
+
+    # Since p_im is a single channel image, you might want to subtract each channel of mean_im_expanded from p_im separately
+    ch1 = p_im_resized - mean_im_expanded[:, :, 0]
+    ch2 = p_im_resized - mean_im_expanded[:, :, 1]
+    ch3 = p_im_resized - mean_im_expanded[:, :, 2]
+    p_im_proc = np.stack((ch1, ch2, ch3), axis=2)
+    
+    return p_im_proc
+
+
+
+def pad_per_angle(center, p_idx, angle, p_im_padded, p_mask_padded):
+    rows, cols, _ = p_im_padded.shape
+    center = (cols / 2, rows / 2)
+        
+    # Creating rotation matrices
+    rot_mat_im = cv2.getRotationMatrix2D(center, angle, 1)
+    rot_mat_mask = cv2.getRotationMatrix2D(center, angle, 1)
+    
+    # Rotating images
+    p_im_padded_r = cv2.warpAffine(p_im_padded, rot_mat_im, (cols, rows), \
+        flags=cv2.INTER_CUBIC, borderMode=cv2.BORDER_CONSTANT, borderValue=(255, 255, 255))
+    
+    # To prevent cv::UMat format error, we need to convert p_mask_padded to float32 numpy array
+    p_mask_padded_r = cv2.warpAffine(np.float32(p_mask_padded), rot_mat_mask, (cols, rows), \
+        flags=cv2.INTER_NEAREST, borderMode=cv2.BORDER_CONSTANT, borderValue=0)
+    
+    # Just load images created in MATLAB code for test (tentative approach)
+    p_im_padded_r = cv2.imread(os.path.join('results', 'resnet_4x_matlab', \
+        f'fid300_rotated_im_{p_idx:04d}_{angle:03d}.jpg'), cv2.IMREAD_COLOR)
+    p_mask_padded_r = cv2.imread(os.path.join('results', 'resnet_4x_matlab', \
+        f'fid300_rotated_mask_{p_idx:04d}_{angle:03d}.jpg'), cv2.IMREAD_GRAYSCALE)
+    
+    return p_im_padded_r, p_mask_padded_r
+
+
+
+def alignment_search_eval_fid300(p_inds, db_ind=2):
+    IMSCALE = 0.5
+    ERODE_PCT = 0.1
+    
+    # Define initial variables
+    db_attr, db_chunks, dbname = get_db_attrs('fid300', db_ind)
+    # len(db_chunks) is 1175
+    db_chunk_inds = db_chunks[0]
+    
+    net = ModifiedNetwork(db_ind=2, db_attr=db_attr)
+    first_feat = load_first_feat(dbname)
+    
+    db_feats_first = first_feat['db_feats']
+    db_feats = fill_db_feats(db_feats_first)
+    
+    feat_dims = first_feat['feat_dims']
+    rfsIm = first_feat['rfsIm']
+    trace_H = first_feat['trace_H']
+    trace_W = first_feat['trace_W']
+
     im_f2i = feat_2_image(rfsIm)
-
-    radius = max(1, np.floor(min(feat_dims[1], feat_dims[2]) * erode_pct))
+    radius = max(1, np.floor(min(feat_dims[1], feat_dims[2]) * ERODE_PCT))
     se = np.ones((int(radius), int(radius)))
-
     ones_w = torch.ones((1, 1, feat_dims[3]), dtype=torch.float32).cuda()
     
     # First, 'results/<dbnmae>' path needs to be created
@@ -79,36 +140,18 @@ def alignment_search_eval_fid300(p_inds, db_ind=2):
         
         # Read and resize the image
         # We need 2D dimension numpy array for p_im (in MATLAB code)
-        p_im = cv2.imread(os.path.join('datasets', 'FID-300', 'tracks_cropped', f'{p:05d}.jpg'), cv2.IMREAD_GRAYSCALE)
-        p_im = cv2.resize(p_im, (0, 0), fx=imscale, fy=imscale)
-        p_H, p_W = p_im.shape
-
-        # Fix latent prints are bigger than the test impressions
-        if p_H > p_W and p_H > trace_H:
-            p_im = cv2.resize(p_im, (trace_H, int((trace_H / p_H) * p_W)))
-        elif p_W >= p_H and p_W > trace_W:
-            p_im = cv2.resize(p_im, (int((trace_W / p_W) * p_H), trace_W))
-        
-        # Subtract mean_im_pix from p_im
-        # p_im = p_im.astype(np.float32) - mean_im_pix
-        mean_im_expanded = cv2.resize(mean_im_pix, (p_im.shape[1], p_im.shape[0]), interpolation=cv2.INTER_CUBIC)
-
-        # Since p_im is a single channel image, you might want to subtract each channel of mean_im_expanded from p_im separately
-        p_im_ch1 = p_im - mean_im_expanded[:, :, 0]
-        p_im_ch2 = p_im - mean_im_expanded[:, :, 1]
-        p_im_ch3 = p_im - mean_im_expanded[:, :, 2]
-        p_im = np.stack((p_im_ch1, p_im_ch2, p_im_ch3), axis=2)
-        p_H, p_W, p_C = p_im.shape
+        p_im_fname = os.path.join('datasets', 'FID-300', 'tracks_cropped', f'{p:05d}.jpg')
+        p_im = preprocess_p_im(p_im_fname, IMSCALE, trace_H, trace_W)
         
         # Pad the latent print
-        pad_H = trace_H - p_H
-        pad_W = trace_W - p_W
+        pad_H = trace_H - p_im.shape[0]
+        pad_W = trace_W - p_im.shape[1]
         
-        # Padding p_im and a logical ones matrix
-        # p_im.shape = (H, W, 3) -> 3D. In MATLAB code, it is 2D.
+        # Padding: p_im.shape = (H, W, 3) -> 3D. In MATLAB code, it is 2D.
+        
         p_im_padded = np.pad(p_im, ((pad_H, pad_H), (pad_W, pad_W), (0,0)), \
             mode='constant', constant_values=255)
-        p_mask_padded = np.pad(np.ones((p_H, p_W, p_C), dtype=bool), ((pad_H, pad_H), (pad_W, pad_W), \
+        p_mask_padded = np.pad(np.ones(p_im.shape, dtype=bool), ((pad_H, pad_H), (pad_W, pad_W), \
             (0, 0)), mode='constant', constant_values=0)
         
         cnt = 0
@@ -125,16 +168,8 @@ def alignment_search_eval_fid300(p_inds, db_ind=2):
         center = (cols / 2, rows / 2)
         
         for r in angles:
-            # # Creating rotation matrices
-            # rot_mat_im = cv2.getRotationMatrix2D(center, r, 1)
-            # rot_mat_mask = cv2.getRotationMatrix2D(center, r, 1)
-            
-            # # Rotating images
-            # p_im_padded_r = cv2.warpAffine(p_im_padded, rot_mat_im, (cols, rows), \
-            #     flags=cv2.INTER_CUBIC, borderMode=cv2.BORDER_CONSTANT, borderValue=(255, 255, 255))
-            # # To prevent cv::UMat format error, we need to convert p_mask_padded to float32 numpy array
-            # p_mask_padded_r = cv2.warpAffine(np.float32(p_mask_padded), rot_mat_mask, (cols, rows), \
-            #     flags=cv2.INTER_NEAREST, borderMode=cv2.BORDER_CONSTANT, borderValue=0)
+            #NOTE - Use this function for real tests
+            # p_im_padded_r, p_mask_padded_r = pad_per_angle(center, p, r, p_im_padded, p_mask_padded)
             
             # Just load images created in MATLAB code for test (tentative approach)
             p_im_padded_r = cv2.imread(os.path.join('results', 'resnet_4x_matlab', \

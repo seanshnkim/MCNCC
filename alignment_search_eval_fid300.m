@@ -58,11 +58,11 @@ ones_w = gpuArray.ones(1, 1, feat_dims(3), 'single');
 db_feats = gpuArray(db_feats);
 for p=reshape(p_inds, 1, [])
   fname = fullfile('results', dbname, sprintf('fid300_alignment_search_ones_res_%04d.mat', p));
-  if exist(fname, 'file'), continue, end
-  lock_fname = [fname, '.lock'];
-  if exist(lock_fname, 'file'), continue, end
-  fid = fopen(lock_fname, 'w');
-  fprintf('p=%d: ', p ),tic
+  % if exist(fname, 'file'), continue, end
+  % lock_fname = [fname, '.lock'];
+  % if exist(lock_fname, 'file'), continue, end
+  % fid = fopen(lock_fname, 'w');
+  % fprintf('p=%d: ', p ),tic
 
   p_im = imresize(imread(fullfile('datasets', 'FID-300', 'tracks_cropped', sprintf('%05d.jpg', p))), ...
                   imscale);
@@ -122,7 +122,7 @@ for p=reshape(p_inds, 1, [])
           fprintf([eraseStr, msg]);
           eraseStr = repmat(sprintf('\b'), 1, length(msg));
         end
-        fprintf(fid, [msg, '\n']);
+        % fprintf(fid, [msg, '\n']);
 
         pix_i = offsety+(i-1)*4+1; pix_j = offsetx+(j-1)*4+1;
         % skip features outside the image
@@ -158,10 +158,10 @@ for p=reshape(p_inds, 1, [])
                              'minsONES', minsONES, ...
                              'locaONES', locaONES));
   % remove lockfile
-  fclose(fid);
-  delete(lock_fname);
+  % fclose(fid);
+  % delete(lock_fname);
 
-  toc
+  % toc
 end
 
 end
