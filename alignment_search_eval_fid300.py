@@ -122,7 +122,8 @@ def return_feat_ijr(p_r_feat, first_feat, h, w, offsety, offsetx, p_mask_padded_
     p_ijr_feat_mask = warp_masks(p_mask_ijr, im_f2i, feat_dims, db_ind) # Placeholder
     p_ijr_feat_mask = cv2.copyMakeBorder(p_ijr_feat_mask, radius, radius, radius, radius, cv2.BORDER_CONSTANT, value=0)
     p_ijr_feat_mask = cv2.erode(p_ijr_feat_mask, se)
-    p_ijr_feat_mask = p_ijr_feat_mask[radius:-radius, radius:-radius, :]
+    #FIXME - IndexError(should be 3D, but 2D array is given)
+    p_ijr_feat_mask = p_ijr_feat_mask[radius:-radius, radius:-radius]
     
     return p_ijr_feat, p_ijr_feat_mask
 
@@ -190,9 +191,9 @@ def alignment_search_eval_fid300(p_inds, db_ind=2):
         assert pad_H >= 0 and pad_W >= 0, f'pad_H={pad_H}, pad_W={pad_W}'
         
         # Padding: p_im.shape = (H, W, 3) -> 3D. In MATLAB code, it is 2D.
-        
         p_im_padded = np.pad(p_im, ((pad_H, pad_H), (pad_W, pad_W), (0,0)), \
             mode='constant', constant_values=255)
+        #NOTE - do not remove the code below -> it is used later
         p_mask_padded = np.pad(np.ones(p_im.shape, dtype=bool), ((pad_H, pad_H), (pad_W, pad_W), \
             (0, 0)), mode='constant', constant_values=0)
         
@@ -248,6 +249,8 @@ def alignment_search_eval_fid300(p_inds, db_ind=2):
                             # The next operations are placeholders and need actual Python functions
                             p_ijr_feat, p_ijr_feat_mask = return_feat_ijr(p_r_feat, first_feat, h, w, offsety, offsetx, p_mask_padded_r, trace_H, trace_W, ERODE_PCT, db_ind)
                             
+                            #REVIEW: p_ijr_feat.shape = torch.Size([1, 147, 217, 84])
+                            p_ijr_feat = p_ijr_feat.squeeze(0)
                             scores_cell = weighted_masked_NCC_features(db_feats, p_ijr_feat, p_ijr_feat_mask, ones_w)  # Placeholder
                             scores_ones[int(pix_i/2+0.5), int(pix_j/2+0.5), r, :] = scores_cell[0]
                             cnt += 1
