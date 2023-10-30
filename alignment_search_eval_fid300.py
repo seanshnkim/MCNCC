@@ -95,99 +95,39 @@ def pad_per_angle(center, p_idx, angle, p_im_padded, p_mask_padded):
     return p_im_padded_r, p_mask_padded_r
 
 
-def foo(feat_dims, pad_H, pad_W, first_feat, erode_pct, angles, p_im_padded_r, p_mask_padded_r, p_r_feat):
-    offsets_y = [0]
-    if pad_H > 1:
-        offsets_y.append(2)
 
-    offsets_x = [0]
-    if pad_W > 1:
-        offsets_x.append(2)
-        
-    feat_dims = first_feat['feat_dims']
-    rfsIm = first_feat['rfsIm']
-    trace_H = first_feat['trace_H']
-    trace_W = first_feat['trace_W']
-
-    im_f2i = feat_2_image(rfsIm)
-    radius = max(1, np.floor(min(feat_dims[1], feat_dims[2]) * erode_pct))
-    se = np.ones((int(radius), int(radius)))
-    ones_w = torch.ones((1, 1, feat_dims[3]), dtype=torch.float32).cuda()
-    
-    for offsets in zip(offsets_x, offsets_y):
-        offsetx, offsety = offsets
-
-        for j in range(p_r_feat.shape[3] - feat_dims[3] + 1):
-            for i in range(p_r_feat.shape[2] - feat_dims[2] + 1):
-                
-                msg = f'{cnt}/{len(angles) * np.ceil((pad_H/2)+0.5) * np.ceil((pad_W/2)+0.5)} '
-                if cnt % 10 == 0:
-                    print(eraseStr + msg, end='')
-                    eraseStr = '\b' * len(msg)
-                
-                pix_i = offsety + i * 4
-                pix_j = offsetx + j * 4
-                
-                if pix_i + trace_H > p_mask_padded_r.shape[0] or \
-                pix_j + trace_W > p_mask_padded_r.shape[1]:
-                    continue
-                
-                # The next operations are placeholders and need actual Python functions
-                p_ijr_feat = p_r_feat[i:i+feat_dims[1], j:j+feat_dims[2], :]
-                p_mask_ijr = p_mask_padded_r[pix_i:pix_i+trace_H, pix_j:pix_j+trace_W]
-                
-                p_ijr_feat_mask = warp_masks(p_mask_ijr, im_f2i, feat_dims, db_ind) # Placeholder
-                p_ijr_feat_mask = cv2.copyMakeBorder(p_ijr_feat_mask, radius, radius, radius, radius, cv2.BORDER_CONSTANT, value=0)
-                p_ijr_feat_mask = cv2.erode(p_ijr_feat_mask, se)
-                p_ijr_feat_mask = p_ijr_feat_mask[radius:-radius, radius:-radius, :]
-                
-                scores_cell = weighted_masked_NCC_features(db_feats, p_ijr_feat, p_ijr_feat_mask, ones_w)  # Placeholder
-                
-                scores_ones[int(pix_i/2+0.5), int(pix_j/2+0.5), r, :] = scores_cell[0]
-                cnt += 1
-    
-    
-def foo2(p_r_feat, first_feat, cnt, erode_pct, pad_H, pad_W, angles, offsety, offsetx, p_mask_padded_r):
+def return_feat_ijr(p_r_feat, first_feat, h, w, offsety, offsetx, p_mask_padded_r, trace_H, trace_W, erode_pct, db_ind):
     feat_dims = first_feat['feat_dims']
     rfsIm = first_feat['rfsIm']
     trace_H = first_feat['trace_H']
     trace_W = first_feat['trace_W']
     
-    eraseStr = ''
-
     im_f2i = feat_2_image(rfsIm)
     radius = max(1, np.floor(min(feat_dims[1], feat_dims[2]) * erode_pct))
     se = np.ones((int(radius), int(radius)))
     
+    pix_i = offsety + h * 4
+    pix_j = offsetx + w * 4
     
-    h_margin = p_r_feat.shape[3] - feat_dims[3]
-    w_margin = p_r_feat.shape[2] - feat_dims[2]
+    p_ijr_feat = p_r_feat[h:h+feat_dims[1], w:w+feat_dims[2], :]
+    p_mask_ijr = p_mask_padded_r[pix_i:pix_i+trace_H, pix_j:pix_j+trace_W]
     
-    for (h, w) in zip(h_margin+1, w_margin+1):
-        msg = f'{cnt}/{len(angles) * np.ceil((pad_H/2)+0.5) * np.ceil((pad_W/2)+0.5)} '
-        if cnt % 10 == 0:
-            print(eraseStr + msg, end='')
-            eraseStr = '\b' * len(msg)
-            
-        pix_i = offsety + h * 4
-        pix_j = offsetx + w * 4
-        
-        if pix_i + trace_H > p_mask_padded_r.shape[0] or \
-        pix_j + trace_W > p_mask_padded_r.shape[1]:
-            continue
-        
-        # The next operations are placeholders and need actual Python functions
-        p_ijr_feat = p_r_feat[h:h+feat_dims[1], w:w+feat_dims[2], :]
-        p_mask_ijr = p_mask_padded_r[pix_i:pix_i+trace_H, pix_j:pix_j+trace_W]
-        
-        p_ijr_feat_mask = warp_masks(p_mask_ijr, im_f2i, feat_dims, db_ind) # Placeholder
-        p_ijr_feat_mask = cv2.copyMakeBorder(p_ijr_feat_mask, radius, radius, radius, radius, cv2.BORDER_CONSTANT, value=0)
-        p_ijr_feat_mask = cv2.erode(p_ijr_feat_mask, se)
-        p_ijr_feat_mask = p_ijr_feat_mask[radius:-radius, radius:-radius, :]
-        
-        
-        cnt += 1
-        
+    p_ijr_feat_mask = warp_masks(p_mask_ijr, im_f2i, feat_dims, db_ind) # Placeholder
+    p_ijr_feat_mask = cv2.copyMakeBorder(p_ijr_feat_mask, radius, radius, radius, radius, cv2.BORDER_CONSTANT, value=0)
+    p_ijr_feat_mask = cv2.erode(p_ijr_feat_mask, se)
+    p_ijr_feat_mask = p_ijr_feat_mask[radius:-radius, radius:-radius, :]
+    
+    return p_ijr_feat, p_ijr_feat_mask
+
+
+
+def print_msg(cnt, angles, eraseStr, pad_H, pad_W):
+    msg = f'{cnt}/{len(angles) * np.ceil((pad_H/2)+0.5) * np.ceil((pad_W/2)+0.5)}'
+    if cnt % 10 == 0:
+        print(eraseStr + msg, end='')
+        eraseStr = '\b' * len(msg)
+    return eraseStr
+
 
 
 def alignment_search_eval_fid300(p_inds, db_ind=2):
@@ -283,16 +223,11 @@ def alignment_search_eval_fid300(p_inds, db_ind=2):
                 for offsety in offsets_y:
                     p_r_feat = generate_db_CNNfeats_gpu(net, p_im_padded_r[offsety:, offsetx:, :])
                     
-                    foo2(p_r_feat, feat_dims)
-                    
                     h_margin = p_r_feat.shape[3] - feat_dims[3]
                     w_margin = p_r_feat.shape[2] - feat_dims[2]
 
                     for (h, w) in zip(h_margin+1, w_margin+1):
-                        msg = f'{cnt}/{len(angles) * np.ceil((pad_H/2)+0.5) * np.ceil((pad_W/2)+0.5)} '
-                        if cnt % 10 == 0:
-                            print(eraseStr + msg, end='')
-                            eraseStr = '\b' * len(msg)
+                        eraseStr = print_msg(cnt, angles, eraseStr, pad_H, pad_W)
                         
                         pix_i = offsety + h * 4
                         pix_j = offsetx + w * 4
@@ -302,16 +237,9 @@ def alignment_search_eval_fid300(p_inds, db_ind=2):
                             continue
                         
                         # The next operations are placeholders and need actual Python functions
-                        p_ijr_feat = p_r_feat[h:h+feat_dims[1], w:w+feat_dims[2], :]
-                        p_mask_ijr = p_mask_padded_r[pix_i:pix_i+trace_H, pix_j:pix_j+trace_W]
-                        
-                        p_ijr_feat_mask = warp_masks(p_mask_ijr, im_f2i, feat_dims, db_ind) # Placeholder
-                        p_ijr_feat_mask = cv2.copyMakeBorder(p_ijr_feat_mask, radius, radius, radius, radius, cv2.BORDER_CONSTANT, value=0)
-                        p_ijr_feat_mask = cv2.erode(p_ijr_feat_mask, se)
-                        p_ijr_feat_mask = p_ijr_feat_mask[radius:-radius, radius:-radius, :]
+                        p_ijr_feat, p_ijr_feat_mask = return_feat_ijr(p_r_feat, first_feat, h, w, offsety, offsetx, p_mask_padded_r, trace_H, trace_W, ERODE_PCT, db_ind)
                         
                         scores_cell = weighted_masked_NCC_features(db_feats, p_ijr_feat, p_ijr_feat_mask, ones_w)  # Placeholder
-                        
                         scores_ones[int(pix_i/2+0.5), int(pix_j/2+0.5), r, :] = scores_cell[0]
                         cnt += 1
             
