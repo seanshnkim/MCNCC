@@ -244,8 +244,9 @@ def alignment_search_eval_fid300(p_inds, db_ind=2):
                                 continue
                             
                             # The next operations are placeholders and need actual Python functions
-                            p_ijr_feat, p_ijr_feat_mask = return_feat_ijr(p_r_feat, first_feat, h, w, offsety, offsetx, p_mask_padded_r, trace_H, trace_W, ERODE_PCT, db_ind)
-                            p_ijr_feat_mask.to('cuda')
+                            p_ijr_feat, p_ijr_feat_mask = return_feat_ijr(p_r_feat, first_feat, h, w, \
+                                offsety, offsetx, p_mask_padded_r, trace_H, trace_W, ERODE_PCT, db_ind)
+                            p_ijr_feat_mask = torch.tensor(p_ijr_feat_mask, dtype=torch.float32).to('cuda')
                             
                             #REVIEW: p_ijr_feat.shape = torch.Size([1, 147, 217, 84]) -> fixed to torch.Size([256, 147, 68])
                             p_ijr_feat = p_ijr_feat.squeeze(0)
