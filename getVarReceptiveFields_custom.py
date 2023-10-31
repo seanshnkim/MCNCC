@@ -1,7 +1,4 @@
 import numpy as np
-import torch
-import torch.nn as nn
-from get_num_conv import get_num_conv
 
 class RecetiveField:
     def __init__(self, size=np.array([]), stride=np.array([]), offset=np.array([])):
@@ -69,8 +66,3 @@ def resolve_receptive_fields(rfs):
                 rf.offset = (e + f) / 2
                 rf.size = f - e + 1
     return rf
-
-
-# def getVarReceptiveField(obj):
-#     num_convLayer = get_num_conv(obj)
-#     for 

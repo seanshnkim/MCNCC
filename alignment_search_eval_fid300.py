@@ -92,12 +92,6 @@ def pad_per_angle(center, p_idx, angle, p_im_padded, p_mask_padded):
     p_mask_padded_r = cv2.warpAffine(np.float32(p_mask_padded), rot_mat_mask, (cols, rows), \
         flags=cv2.INTER_NEAREST, borderMode=cv2.BORDER_CONSTANT, borderValue=0)
     
-    # Just load images created in MATLAB code for test (tentative approach)
-    p_im_padded_r = cv2.imread(os.path.join('results', 'resnet_4x_matlab', \
-        f'fid300_rotated_im_{p_idx:04d}_{angle:03d}.jpg'), cv2.IMREAD_COLOR)
-    p_mask_padded_r = cv2.imread(os.path.join('results', 'resnet_4x_matlab', \
-        f'fid300_rotated_mask_{p_idx:04d}_{angle:03d}.jpg'), cv2.IMREAD_GRAYSCALE)
-    
     return p_im_padded_r, p_mask_padded_r
 
 
@@ -116,7 +110,9 @@ def return_feat_ijr(p_r_feat, first_feat, h, w, offsety, offsetx, p_mask_padded_
     pix_i = offsety + h * 4
     pix_j = offsetx + w * 4
     
-    p_ijr_feat = p_r_feat[h:h+feat_dims[1], w:w+feat_dims[2], :]
+    # p_r_feat.shape = (batch_size, channel_size, height, width)
+    # feat_dims = (batch_size=1175, out_channel_size=256, height=147, width=68)
+    p_ijr_feat = p_r_feat[:, :, h:h+feat_dims[2], w:w+feat_dims[3]]
     p_mask_ijr = p_mask_padded_r[pix_i:pix_i+trace_H, pix_j:pix_j+trace_W]
     
     p_ijr_feat_mask = warp_masks(p_mask_ijr, im_f2i, feat_dims, db_ind) # Placeholder
@@ -170,6 +166,7 @@ def alignment_search_eval_fid300(p_inds, db_ind=2):
     # p_inds = [start, end]
     for p in range(p_inds[0], p_inds[1]+1):
         fname = os.path.join('results', dbname, f'fid300_alignment_search_ones_res_{p:04d}.mat')
+        
         # if os.path.exists(fname):
         #     continue
         # lock_fname = fname + '.lock'
@@ -181,7 +178,6 @@ def alignment_search_eval_fid300(p_inds, db_ind=2):
         # fid.write(f'p={time.time()}')
         
         # Read and resize the image
-        # We need 2D dimension numpy array for p_im (in MATLAB code)
         p_im_fname = os.path.join('datasets', 'FID-300', 'tracks_cropped', f'{p:05d}.jpg')
         p_im = preprocess_p_im(p_im_fname, IMSCALE, trace_H, trace_W)
         
