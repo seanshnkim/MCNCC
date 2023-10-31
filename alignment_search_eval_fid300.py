@@ -121,6 +121,7 @@ def return_feat_ijr(p_r_feat, first_feat, h, w, offsety, offsetx, p_mask_padded_
     #FIXME - IndexError(should be 3D, but 2D array is given)
     p_ijr_feat_mask = p_ijr_feat_mask[radius:-radius, radius:-radius]
     
+    # p_ijr_feat.shape, p_ijr_feat_mask.shape = (torch.Size([1, 256, 147, 68]), (293, 135))
     return p_ijr_feat, p_ijr_feat_mask
 
 
@@ -245,7 +246,7 @@ def alignment_search_eval_fid300(p_inds, db_ind=2):
                             # The next operations are placeholders and need actual Python functions
                             p_ijr_feat, p_ijr_feat_mask = return_feat_ijr(p_r_feat, first_feat, h, w, offsety, offsetx, p_mask_padded_r, trace_H, trace_W, ERODE_PCT, db_ind)
                             
-                            #REVIEW: p_ijr_feat.shape = torch.Size([1, 147, 217, 84])
+                            #REVIEW: p_ijr_feat.shape = torch.Size([1, 147, 217, 84]) -> fixed to torch.Size([256, 147, 68])
                             p_ijr_feat = p_ijr_feat.squeeze(0)
                             scores_cell = weighted_masked_NCC_features(db_feats, p_ijr_feat, p_ijr_feat_mask, ones_w)  # Placeholder
                             scores_ones[int(pix_i/2+0.5), int(pix_j/2+0.5), r, :] = scores_cell[0]
