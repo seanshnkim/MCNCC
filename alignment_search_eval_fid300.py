@@ -257,7 +257,8 @@ def alignment_search_eval_fid300(p_inds, db_ind=2):
                             p_ijr_feat = p_ijr_feat.squeeze(0)
                             # scores_cell.shape = torch.Size([1, 1, 1, 100])
                             scores_cell = weighted_masked_NCC_features(db_feats, p_ijr_feat, p_ijr_feat_mask, ones_w)  # Placeholder
-                            scores_ones[int(pix_i/2+0.5), int(pix_j/2+0.5), ang_idx, :] = scores_cell[0]
+                            # scores_ones.shape = (71, 17, 11, 100)
+                            scores_ones[int(pix_i/2+0.5), int(pix_j/2+0.5), ang_idx, :] = scores_cell
                             cnt += 1
             
         minsONES = np.max(np.max(np.max(scores_ones, axis=0), axis=0), axis=0)
