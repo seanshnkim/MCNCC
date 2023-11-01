@@ -144,6 +144,8 @@ for p=reshape(p_inds, 1, [])
         % find the argmax score of database entries
         scores_cell = weighted_masked_NCC_features(db_feats, p_ijr_feat, p_ijr_feat_mask, ...
                                                    {ones_w});
+        % scores_cell = weighted_masked_NCC_features(db_feats, p_ijr_feat, p_ijr_feat_mask, ...
+        %                                              ones_w);
         scores_ones(pix_i/2+0.5, pix_j/2+0.5, r, :) = scores_cell{1};
         cnt = cnt+1;
       end

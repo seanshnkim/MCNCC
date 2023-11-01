@@ -158,7 +158,8 @@ def alignment_search_eval_fid300(p_inds, db_ind=2):
     trace_H = first_feat['trace_H']
     trace_W = first_feat['trace_W']
 
-    ones_w = torch.ones((1, 1, feat_dims[3]), dtype=torch.float32).cuda()
+    # feat_dims[1] = 256 (out_channel_size)
+    ones_w = torch.ones((feat_dims[1], 1, 1), dtype=torch.float32).cuda()
     
     # First, 'results/<dbnmae>' path needs to be created
     if not os.path.exists(os.path.join('results', dbname)):
@@ -198,24 +199,26 @@ def alignment_search_eval_fid300(p_inds, db_ind=2):
         eraseStr = ''
 
         angles = np.arange(-20, 21, 4)  # Creating an array from -20 to 20 with a step of 4
+        num_angles = len(angles)
         transx = np.arange(1, pad_W+2, 2)  # Creating an array from 1 to pad_W+1 with a step of 2
         transy = np.arange(1, pad_H+2, 2)  # Creating an array from 1 to pad_H+1 with a step of 2
 
         # Initializing scores_ones with zeros
-        scores_ones = np.zeros((len(transy), len(transx), len(angles), db_feats.shape[3]), dtype=np.float32)
+        scores_ones = np.zeros((len(transy), len(transx), num_angles, db_feats.shape[3]), dtype=np.float32)
 
         rows, cols, _ = p_im_padded.shape
         center = (cols / 2, rows / 2)
         
-        for r in angles:
+        for ang_idx in range(num_angles):
+            ang = angles[ang_idx]
             #NOTE - Use this function for real tests
             # p_im_padded_r, p_mask_padded_r = pad_per_angle(center, p, r, p_im_padded, p_mask_padded)
             
             # Just load images created in MATLAB code for test (tentative approach)
             p_im_padded_r = cv2.imread(os.path.join('results', 'resnet_4x_matlab', \
-                f'fid300_rotated_im_{p:04d}_{r:03d}.jpg'), cv2.IMREAD_COLOR)
+                f'fid300_rotated_im_{p:04d}_{ang:03d}.jpg'), cv2.IMREAD_COLOR)
             p_mask_padded_r = cv2.imread(os.path.join('results', 'resnet_4x_matlab', \
-                f'fid300_rotated_mask_{p:04d}_{r:03d}.jpg'), cv2.IMREAD_GRAYSCALE)
+                f'fid300_rotated_mask_{p:04d}_{ang:03d}.jpg'), cv2.IMREAD_GRAYSCALE)
                     
             offsets_y = [0]
             if pad_H > 1:
@@ -252,8 +255,9 @@ def alignment_search_eval_fid300(p_inds, db_ind=2):
                             
                             #REVIEW: p_ijr_feat.shape = torch.Size([1, 147, 217, 84]) -> fixed to torch.Size([256, 147, 68])
                             p_ijr_feat = p_ijr_feat.squeeze(0)
+                            # scores_cell.shape = torch.Size([1, 1, 1, 100])
                             scores_cell = weighted_masked_NCC_features(db_feats, p_ijr_feat, p_ijr_feat_mask, ones_w)  # Placeholder
-                            scores_ones[int(pix_i/2+0.5), int(pix_j/2+0.5), r, :] = scores_cell[0]
+                            scores_ones[int(pix_i/2+0.5), int(pix_j/2+0.5), ang_idx, :] = scores_cell[0]
                             cnt += 1
             
         minsONES = np.max(np.max(np.max(scores_ones, axis=0), axis=0), axis=0)
