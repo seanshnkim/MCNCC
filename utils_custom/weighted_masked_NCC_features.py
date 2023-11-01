@@ -1,3 +1,4 @@
+import torch
 import numpy as np
 
 # weighted_masked_NCC_features(db_feats, p_ijr_feat, p_ijr_feat_mask, ones_w)
@@ -41,57 +42,35 @@ def masked_NCC_features(IM, TPL, MASK):
     assert MASK_H == TPL_H and MASK_W == TPL_W
     assert MASK_H == IM_H and MASK_W == IM_W
 
-    nonzero = np.sum(MASK)
+    nonzero = MASK.sum()
     # IM = IM * MASK  # zero out invalid region
     # IM.shape = (256, 147, 68, 100) and MASK.shape = (147, 68),
-    MASK_exp = np.expand_dims(MASK, axis=0)
-    MASK_exp = np.expand_dims(MASK_exp, axis=-1)
-    IM = IM * MASK_exp
+    MASK_4D = MASK.unsqueeze(0).unsqueeze(3).expand_as(IM)
+    IM = IM * MASK_4D
     
     # mu.shape = (256, 100)
-    mu = np.sum(np.sum(IM, axis=1), axis=1) / nonzero  # compute mean of valid region
-    mu_exp = np.expand_dims(mu, axis=1)
-    mu_exp = np.expand_dims(mu_exp, axis=1)
-    IM = IM - mu_exp
-    IM = IM * MASK_exp  # keep invalid region zero
+    mu = (IM.mean(axis=1)).mean(axis=1) / nonzero
+    mu_4D = mu.unsqueeze(1).unsqueeze(1)
+    IM = IM - mu_4D
+    IM = IM * MASK_4D  # keep invalid region zero
     # normalized in width and height, respectively
     # Therefore, IM_norm.shape should turn into (256, 100)
-    IM_norm = np.sum(np.sum(IM**2, axis=1), axis=1)
+    IM_norm = torch.sum(torch.sum(IM**2, axis=1), axis=1)
 
-    # TPL.shape = (256, 147, 68)
-    #FIXME - TPL.device = cuda:0, and MASK is just numpy array
+    # TPL.shape = (256, 147, 68) MASK.shape = (147, 68)
     TPL = TPL * MASK
-    mu = np.sum(np.sum(TPL, axis=1), axis=2) / nonzero
-    TPL = TPL - mu
+    # mu = np.sum(np.sum(TPL, axis=1), axis=2) / nonzero
+    mu = (TPL.sum(axis=1)).sum(axis=1) / nonzero
+    mu_3D = mu.unsqueeze(1).unsqueeze(2)
+    TPL = TPL - mu_3D
     TPL = TPL * MASK
-    TPL_norm = np.sum(np.sum(TPL**2, axis=1), axis=2)
+    TPL_norm = torch.sum(torch.sum(TPL**2, axis=1), axis=1)
 
-    numer = IM * TPL
-    denom = np.sqrt(IM_norm * TPL_norm + 1e-5)
-    feat = numer / denom
-    feat = feat * MASK
+    TPL_4D = TPL.unsqueeze(3)
+    numer = IM * TPL_4D
+    denom = IM_norm * TPL_norm.unsqueeze(1) + 1e-5
+    feat = numer / denom.unsqueeze(1).unsqueeze(2)
+    # MASK.shape = torch.Size([147, 68])
+    feat = feat * MASK.unsqueeze(0).unsqueeze(3)
 
     return feat
-
-'''
-I used NumPy, a powerful library in Python that supports a wide range of mathematical operations, 
-making the code more MATLAB-like.
-
-np.convolve() is used to replicate MATLAB's vl_nnconv() function. 
-
-However, be cautious as they may not be entirely equivalent 
-depending on the specifics of your use case, 
-and you might want to use a different function or library 
-like TensorFlow or PyTorch for more complex operations.
-
-For indexing, Python uses 0-based indexing, 
-so adjustments are made in loop indices and slicing. 
-Slicing is used in place of MATLAB's colon notation for indexing arrays.
-
-Instead of bsxfun(), broadcasting in NumPy is utilized, 
-which automatically applies element-wise binary operations in a vectorized manner.
-
-Lambda functions and the map() function are used to 
-apply a function element-wise to items in a list or array, 
-replacing the usage of cell arrays in MATLAB.
-'''
