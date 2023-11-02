@@ -11,7 +11,7 @@ from utils_custom.get_db_attrs import get_db_attrs
 from utils_custom.warp_masks import warp_masks
 from utils_custom.weighted_masked_NCC_features import weighted_masked_NCC_features
 from utils_custom.feat_2_image import feat_2_image
-from modified_network import ModifiedNetwork
+from modified_network import ResNet50Encoder
 from generate_db_CNNfeats_gpu import generate_db_CNNfeats_gpu
 
 
@@ -41,11 +41,11 @@ def fill_db_feats(db_feats_first, db_chunk_inds, dbname):
 
     # Loading specified chunks of the database and filling the db_feats array
     start_idx, end_idx = db_chunk_inds
-    for i, ind in enumerate(range(start_idx, end_idx)):
+    for ind in range(start_idx, end_idx):
         filename = os.path.join('feats', dbname, f'fid300_{ind:03d}.pkl')
         with open(filename, 'rb') as filename:
             dat = pickle.load(filename)
-        db_feats[:, :, :, i] = dat['db_feats']
+        db_feats[:, :, :, ind-1] = dat['db_feats']
 
     return db_feats
 

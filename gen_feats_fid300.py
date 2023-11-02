@@ -6,43 +6,51 @@ from utils_custom.get_db_attrs import get_db_attrs
 from generate_db_CNNfeats import generate_db_CNNfeats
 import pickle
 
-from modified_network import ModifiedNetwork
+from modified_network import ResNet50Encoder
 from getVarReceptiveFields_custom import get_receptive_fields
 
+IMSCALE = 0.5
+NUM_REF_IMAGE = 1175
+IM_FIXED_H = 586
+PAD_VAL = 255
+NUM_CHANNELS = 3
 
-def gen_feats_fid300(db_ind=2):
-    imscale = 0.5
 
-    db_attr, _, dbname = get_db_attrs('fid300', db_ind)  # You should define get_db_attrs function
-
+def preprocess_im(img_path, num_img, scale, fixed_h, pad_val):
     ims = []
     trace_H, trace_W = 0, 0
-    for i in range(1, 1176):
-        im = cv2.imread(os.path.join('datasets', 'FID-300', 'references', f"{i:05d}.png"), cv2.IMREAD_GRAYSCALE)
-        # only 4 shoes are 1 pixel taller (height=587)
-        im = im[0:586, :]
+    for i in range(1, num_img+1):
+        im = cv2.imread(os.path.join(img_path, f"{i:05d}.png"), cv2.IMREAD_GRAYSCALE)
+        # only 4 shoes are 1 pixel taller (all images -> height=586, only 4 images -> height=587)
+        im = im[:fixed_h, :]
 
         if i in [107, 525]:
             im = cv2.flip(im, 1)
 
-        # pad to max width
-        w = im.shape[1]
-        pad_left = np.full((im.shape[0], (270 - w) // 2), 255, dtype=np.uint8)
-        pad_right = np.full((im.shape[0], (270 - w + 1) // 2), 255, dtype=np.uint8)
-        
-        im = np.hstack((pad_left, im, pad_right))
-        im = cv2.resize(im, None, fx=imscale, fy=imscale, interpolation=cv2.INTER_AREA)
+        im_H, im_W = im.shape
+        pad_left = np.full((im_H, (270 - im_W) // 2), pad_val, dtype=np.uint8)
+        pad_right = np.full((im_H, (270 - im_W + 1) // 2), pad_val, dtype=np.uint8)
+        im_padded = np.hstack((pad_left, im, pad_right))
+        im_pad_resized = cv2.resize(im_padded, None, fx=scale, fy=scale, interpolation=cv2.INTER_AREA)
         
         if i == 1:
-            trace_H, trace_W = im.shape
-        ims.append(im)
+            trace_H, trace_W = im_pad_resized.shape
+            
+        ims.append(im_pad_resized)
 
     # zero-center the data
+    # ims.shape = (batch_size=1175, height=293, width=135)
     ims = np.array(ims)
-    mean_im = np.mean(ims, axis=0)
-    mean_im_pix = np.mean(mean_im)
-    ims = ims - mean_im_pix
-    ims = np.tile(ims[:, :, np.newaxis], (1, 1, 3, 1))
+    mean_one_im = np.mean(ims, axis=0)
+    mean_one_pix = np.mean(np.mean(mean_one_im, axis=0))
+    ims_zero_centered = ims - mean_one_pix
+    ims_4D = np.tile(ims_zero_centered[:, :, np.newaxis], (1, 1, NUM_CHANNELS, 1))
+
+    return ims_4D, trace_H, trace_W
+
+
+def gen_feats_fid300(db_ind=2):
+    db_attr, _, dbname = get_db_attrs('fid300', db_ind)
 
     groups = [
         [162, 390, 881],
@@ -71,63 +79,62 @@ def gen_feats_fid300(db_ind=2):
         [1169, 1170],
     ]
 
-    treadids = np.zeros(1175)
+    treadids = np.zeros(NUM_REF_IMAGE)
     id = 0
     for g in groups:
         id += 1
         for p in g:
             treadids[p-1] = id
     
-    for p in range(1175):
+    for p in range(NUM_REF_IMAGE):
         if treadids[p] == 0:
             id += 1
             treadids[p] = id
 
-    # net = load_modify_network(db_ind, db_attr)  
-    net = ModifiedNetwork(db_ind=2, db_attr=db_attr)
+    net = ResNet50Encoder(db_ind=2, db_attr=db_attr)
     
-    # In this case, net.vars(1).name is same as 'data'
-    ims_transposed = ims.transpose(0, 2, 1, 3)
-    all_db_feats = generate_db_CNNfeats(net, ims_transposed)
-    # all_db_labels.shape = (1, 1, 1, 1175)
+    ref_img_path = os.path.join('datasets', 'FID-300', 'references')
+    ref_imgs_processed, trace_H, trace_W = preprocess_im(ref_img_path, \
+        NUM_REF_IMAGE, IMSCALE, IM_FIXED_H, PAD_VAL)
+    
+    # ref_imgs_processed.shape = (batch_size=1175, height=293, width=135, channels=3)
+    #NOTE: all_db_feats.shape = (batch_size=1175, out_channels=256, height=147, width=68)
+    ref_imgs_processed = np.transpose(ref_imgs_processed, (0, 2, 1, 3))
+    all_db_feats = generate_db_CNNfeats(net, ref_imgs_processed)
     all_db_labels = treadids.reshape(1, 1, 1, -1)
 
-    
-    # feat_idx = 27
     feat_dims = all_db_feats.shape
-    rfsIm = get_receptive_fields(net.model[0])
+    receptive_fields = get_receptive_fields(net.model[0])
     
     # Creating a directory
-    output_dir = os.path.join('feats', dbname)
-    os.makedirs(output_dir, exist_ok=True)
+    feats_path = os.path.join('feats', dbname)
+    os.makedirs(feats_path, exist_ok=True)
 
     # save all_db_feats
-    save_entire_path = os.path.join(output_dir, 'fid300_all.pkl')
-    with open(save_entire_path, 'wb') as file:
+    feats_all_path = os.path.join(feats_path, 'fid300_all.pkl')
+    with open(feats_all_path, 'wb') as file:
         pickle.dump({'db_feats': all_db_feats}, file)
     
-    # all_db_feats.shape = (1175, 256, X, 1175)
-    # Therefore, all_db_feats.shape[0] should be correct
-    # for i in range(all_db_feats.shape[3]):
-    for i in range(all_db_feats.shape[0]):
+    assert NUM_REF_IMAGE == all_db_feats.shape[0]
+    for i in range(NUM_REF_IMAGE):
         db_feats = all_db_feats[i, :, :, :]
         db_labels = all_db_labels[:, :, :, i]
         
         # Saving the first index with additional variables
         if i == 0:
-            save_path = os.path.join(output_dir, 'fid300_001.pkl')
-            with open(save_path, 'wb') as file:
+            feats_each_path = os.path.join(feats_path, 'fid300_001.pkl')
+            with open(feats_each_path, 'wb') as file:
                 pickle.dump({
                     'db_feats': db_feats,
                     'db_labels': db_labels,
                     'feat_dims': feat_dims,
-                    'rfsIm': rfsIm,
+                    'rfsIm': receptive_fields,
                     'trace_H': trace_H,
                     'trace_W': trace_W
                 }, file)
         else:
-            save_path = os.path.join(output_dir, f'fid300_{i+1:03d}.pkl')
-            with open(save_path, 'wb') as file:
+            feats_each_path = os.path.join(feats_path, f'fid300_{i+1:03d}.pkl')
+            with open(feats_each_path, 'wb') as file:
                 pickle.dump({
                     'db_feats': db_feats,
                     'db_labels': db_labels
