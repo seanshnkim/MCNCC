@@ -1,11 +1,9 @@
 import torch
 import cv2
 import numpy as np
-# from scipy.io import loadmat, savemat
 import scipy.io as sio
 import os
 import pickle
-import time
 
 from utils_custom.get_db_attrs import get_db_attrs
 from utils_custom.warp_masks import warp_masks
@@ -15,25 +13,12 @@ from modified_network import ResNet50Encoder
 from generate_db_CNNfeats_gpu import generate_db_CNNfeats_gpu
 
 
-def load_first_feat(dbname):
-    '''pickle.load(f) returns a dictionary which has
-    db_feats, db_labels, feat_dims, rfsIm, trace_H, trace_W as keys'''
-    
-    first_feat_path = os.path.join(os.path.join('feats', dbname), 'fid300_001.pkl')
-    
-    with open(first_feat_path, 'rb') as f:
-        fid300_001 = pickle.load(f)
-    
-    return fid300_001
-
-
-
-def fill_db_feats(db_feats_first, db_chunk_inds, dbname):
-    #NOTE - Load the entire db_feats
-    # if os.path.isfile(os.path.join('feats', dbname, 'fid300_all.pkl')):
-    #     with open(os.path.join('feats', dbname, 'fid300_all.pkl'), 'rb') as f:
-    #         dat = pickle.load(f)
-    #     return dat['db_feats']
+def load_db_feats(db_feats_first, db_chunk_inds, dbname, load_combined=True):
+    # NOTE - Load the entire db_feats
+    if load_combined:
+        with open(os.path.join('feats', dbname, 'fid300_all.pkl'), 'rb') as f:
+            dat = pickle.load(f)
+        return dat['db_feats']
     
     len_db_chunks = db_chunk_inds[1] - db_chunk_inds[0]
     db_feats = np.zeros((db_feats_first.shape[0], db_feats_first.shape[1], 
@@ -139,24 +124,29 @@ def alignment_search_eval_fid300(p_inds, db_ind=2):
     IMSCALE = 0.5
     ERODE_PCT = 0.1
     
-    # Define initial variables
     db_attr, db_chunks, dbname = get_db_attrs('fid300', db_ind)
-    # len(db_chunks) is 1175
+    # db_chunk_inds = [1, 1176]. 1175 is equal to the number of reference images in FID-300 dataset.
     db_chunk_inds = db_chunks[0]
-    
-    #FIXME - For debugging, use only 100 chunks
+    #FIXME - Since it takes too long to test with entire data, use only 100 chunks
     db_chunk_inds = (1, 101)
     
-    net = ModifiedNetwork(db_ind=2, db_attr=db_attr)
-    first_feat = load_first_feat(dbname)
+    net = ResNet50Encoder(db_ind=2, db_attr=db_attr)
     
-    db_feats_first = first_feat['db_feats']
-    db_feats = fill_db_feats(db_feats_first, db_chunk_inds, dbname)
+    feats_info_path  = os.path.join('feats', dbname, 'fid300_feat_info.pkl')
+    with open(feats_info_path, 'rb') as f:
+        feats_gen_info = pickle.load(f)
     
-    feat_dims = first_feat['feat_dims']
-    rfsIm = first_feat['rfsIm']
-    trace_H = first_feat['trace_H']
-    trace_W = first_feat['trace_W']
+    first_feat_path = os.path.join('feats', dbname, 'fid300_001.pkl')
+    with open(first_feat_path, 'rb') as f:
+        first_feat = pickle.load(f)
+    
+    db_first_feats = first_feat['db_feats']
+    db_feats = load_db_feats(db_first_feats, db_chunk_inds, dbname)
+    
+    feat_dims = feats_gen_info['feat_dims']
+    rfsIm = feats_gen_info['receptive_fields']
+    trace_H = feats_gen_info['trace_H']
+    trace_W = feats_gen_info['trace_W']
 
     # feat_dims[1] = 256 (out_channel_size)
     ones_w = torch.ones((feat_dims[1], 1, 1), dtype=torch.float32).cuda()

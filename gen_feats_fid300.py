@@ -1,13 +1,12 @@
 import numpy as np
 import cv2
 import os
-from scipy.io import savemat
-from utils_custom.get_db_attrs import get_db_attrs
-from generate_db_CNNfeats import generate_db_CNNfeats
 import pickle
 
 from modified_network import ResNet50Encoder
 from getVarReceptiveFields_custom import get_receptive_fields
+from utils_custom.get_db_attrs import get_db_attrs
+from generate_db_CNNfeats import generate_db_CNNfeats
 
 IMSCALE = 0.5
 NUM_REF_IMAGE = 1175
@@ -49,6 +48,44 @@ def preprocess_im(img_path, num_img, scale, fixed_h, pad_val):
     return ims_4D, trace_H, trace_W
 
 
+def save_feats_fid300(dbname, db_feats_info, save_combined=True):
+    feats_path = os.path.join('feats', dbname)
+    os.makedirs(feats_path, exist_ok=True)
+    
+    feats_gen_info = os.path.join(feats_path, 'fid300_feat_info.pkl')
+    with open(feats_gen_info, 'wb') as file:
+        pickle.dump({
+            'feat_dims': db_feats_info['feat_dims'],
+            'receptive_fields': db_feats_info['receptive_fields'],
+            'trace_H': db_feats_info['trace_H'],
+            'trace_W': db_feats_info['trace_W']
+            }, file)
+
+    # save all_db_feats
+    if save_combined:
+        feats_all_path = os.path.join(feats_path, 'fid300_all.pkl')
+        
+        if not os.path.exists(feats_all_path):
+            with open(feats_all_path, 'wb') as file:
+                pickle.dump(db_feats_info, file)
+                
+    # save each db_feats into separate file
+    else:
+        assert NUM_REF_IMAGE == db_feats_info['db_feats'].shape[0]
+        for i in range(NUM_REF_IMAGE):
+            db_feats = db_feats_info['db_feats'][i, :, :, :]
+            db_labels = db_feats_info['db_labels'][:, :, :, i]
+            feats_each_path = os.path.join(feats_path, f'fid300_{i+1:03d}.pkl')
+            
+            if not os.path.exists(feats_each_path):
+                with open(feats_each_path, 'wb') as file:
+                    pickle.dump({
+                        'db_feats': db_feats,
+                        'db_labels': db_labels
+                    }, file)
+
+    
+
 def gen_feats_fid300(db_ind=2):
     db_attr, _, dbname = get_db_attrs('fid300', db_ind)
 
@@ -78,7 +115,6 @@ def gen_feats_fid300(db_ind=2):
         [1156, 1157],
         [1169, 1170],
     ]
-
     treadids = np.zeros(NUM_REF_IMAGE)
     id = 0
     for g in groups:
@@ -99,43 +135,19 @@ def gen_feats_fid300(db_ind=2):
     
     # ref_imgs_processed.shape = (batch_size=1175, height=293, width=135, channels=3)
     #NOTE: all_db_feats.shape = (batch_size=1175, out_channels=256, height=147, width=68)
-    ref_imgs_processed = np.transpose(ref_imgs_processed, (0, 2, 1, 3))
-    all_db_feats = generate_db_CNNfeats(net, ref_imgs_processed)
+    # ref_imgs_processed = )
+    all_db_feats = generate_db_CNNfeats(net, np.transpose(ref_imgs_processed, (0, 2, 1, 3)))
     all_db_labels = treadids.reshape(1, 1, 1, -1)
 
     feat_dims = all_db_feats.shape
-    receptive_fields = get_receptive_fields(net.model[0])
+    rf = get_receptive_fields(net.model[0])
     
-    # Creating a directory
-    feats_path = os.path.join('feats', dbname)
-    os.makedirs(feats_path, exist_ok=True)
-
-    # save all_db_feats
-    feats_all_path = os.path.join(feats_path, 'fid300_all.pkl')
-    with open(feats_all_path, 'wb') as file:
-        pickle.dump({'db_feats': all_db_feats}, file)
-    
-    assert NUM_REF_IMAGE == all_db_feats.shape[0]
-    for i in range(NUM_REF_IMAGE):
-        db_feats = all_db_feats[i, :, :, :]
-        db_labels = all_db_labels[:, :, :, i]
-        
-        # Saving the first index with additional variables
-        if i == 0:
-            feats_each_path = os.path.join(feats_path, 'fid300_001.pkl')
-            with open(feats_each_path, 'wb') as file:
-                pickle.dump({
-                    'db_feats': db_feats,
-                    'db_labels': db_labels,
-                    'feat_dims': feat_dims,
-                    'rfsIm': receptive_fields,
-                    'trace_H': trace_H,
-                    'trace_W': trace_W
-                }, file)
-        else:
-            feats_each_path = os.path.join(feats_path, f'fid300_{i+1:03d}.pkl')
-            with open(feats_each_path, 'wb') as file:
-                pickle.dump({
-                    'db_feats': db_feats,
-                    'db_labels': db_labels
-                }, file)
+    db_feats_info = {
+        'db_feats': all_db_feats,
+        'db_labels': all_db_labels,
+        'feat_dims': feat_dims,
+        'receptive_fields': rf,
+        'trace_H': trace_H,
+        'trace_W': trace_W
+    }
+    save_feats_fid300(dbname, db_feats_info, save_combined=True)
