@@ -58,7 +58,8 @@ def save_feats_fid300(dbname, db_feats_info, save_combined=True):
             'feat_dims': db_feats_info['feat_dims'],
             'receptive_fields': db_feats_info['receptive_fields'],
             'trace_H': db_feats_info['trace_H'],
-            'trace_W': db_feats_info['trace_W']
+            'trace_W': db_feats_info['trace_W'],
+            'data_type': db_feats_info['data_type']
             }, file)
 
     # save all_db_feats
@@ -148,6 +149,7 @@ def gen_feats_fid300(db_ind=2):
         'feat_dims': feat_dims,
         'receptive_fields': rf,
         'trace_H': trace_H,
-        'trace_W': trace_W
+        'trace_W': trace_W,
+        'data_type': all_db_feats.dtype
     }
     save_feats_fid300(dbname, db_feats_info, save_combined=True)

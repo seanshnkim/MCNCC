@@ -18,65 +18,57 @@ torch.Size([1, 1, 68])
 '''
 
 # w_cell.shape = (1, 1, 256)
-def weighted_masked_NCC_features(db, tpl, mask, w_cell):
+def weighted_masked_NCC_features(db_feats, query_feat, mask, weight):
     # entire data_size N
-    N = db.shape[3]
-    batchSize = 200
-    numBatches = np.ceil(N / batchSize).astype(int)
+    db_chunk_size = db_feats.shape[0]
+    BATCH_SIZE = 20
+    num_batches = np.ceil(db_chunk_size / BATCH_SIZE).astype(int)
 
-    all_scores = torch.zeros((1, 1, 1, N), dtype=torch.float32)
+    all_scores = torch.zeros((db_chunk_size, 1, 1, 1), dtype=torch.float32)
 
-    for b in range(numBatches):
-        inds = slice(b * batchSize, min((b+1) * batchSize, N))
-        feats = masked_NCC_features(db[:, :, :, inds], tpl, mask)
-        
-        # torch.Size([out_channels=1, in_channels=256, kernel_height=1, kernel_width=1])
-        w_cell_expanded = w_cell.unsqueeze(0)
-        # feats_permuted.shape = torch.Size([minibatch=100, in_channels=256, height=147, width=68])
-        feats_permuted = feats.permute(3, 0, 1, 2)
-        # conv_result.shape = torch.Size([100, 1, 147, 68])
-        conv_result = F.conv2d(feats_permuted, w_cell_expanded, padding='valid')
-        # Summing over the width and height dimensions and normalizing by the minibatch size
-        all_scores[0, 0, 0, inds] = conv_result.sum(dim=(2, 3), keepdim=True).div(feats.size(3)).permute(1, 2, 3, 0)
+    for b in range(num_batches):
+        inds = slice(b * BATCH_SIZE, min((b+1) * BATCH_SIZE, db_chunk_size))
+        feats = masked_NCC_features(db_feats[inds, :, :, :], query_feat, mask)
+        # conv_result.shape = torch.Size([BATCH_SIZE, 1, 147, 68])
+        conv_result = F.conv2d(feats, weight, padding='valid')
+        # Sum over the width and height dimensions and normalize by the minibatch size
+        all_scores[inds, :, :, :] = conv_result.sum(dim=(2, 3), keepdim=True).div(feats.shape[0])
 
     return all_scores
 
 
-def masked_NCC_features(IM, TPL, MASK):
+def masked_NCC_features(imgs, feat, mask):
     # MASK is 2D array
-    MASK_H, MASK_W = MASK.shape
-    TPL_C, TPL_H, TPL_W = TPL.shape
-    IM_H, IM_W = IM.shape[1], IM.shape[2]
+    mask_H, mask_W = mask.shape
+    feat_CH, feat_H, feat_W = feat.shape
+    img_H, img_W = imgs.shape[2], imgs.shape[3]
     
-    assert MASK_H == TPL_H and MASK_W == TPL_W
-    assert MASK_H == IM_H and MASK_W == IM_W
+    assert mask_H == feat_H and mask_W == feat_W
+    assert mask_H == img_H and mask_W == img_W
 
-    nonzero = MASK.sum()
+    nonzero = mask.sum()
     # IM.shape = (256, 147, 68, 100) and MASK.shape = (147, 68)
-    MASK_4D = MASK.unsqueeze(0).unsqueeze(3).expand_as(IM)
+    mask_4D = mask.expand_as(imgs)
     # IM = IM * MASK_4D -> Instead, use in-place multiplication to optimize GPU memory usage
-    IM.mul_(MASK_4D)
+    imgs.mul_(mask_4D)
     
-    # mu.shape = (256, 100)
-    mu = IM.mean(dim=(1,2)) / nonzero
-    mu_4D = mu.unsqueeze(1).unsqueeze(1)
-    IM.sub_(mu_4D).mul_(MASK_4D)
-    # normalized in width and height, respectively
-    # Therefore, IM_norm.shape should turn into (256, 100)
-    IM_norm = IM.pow(2).sum(dim=(1,2))
+    # get mean of each image by summing over width and height and divide by "nonzero"
+    mu = torch.mean(imgs, dim=(2,3), keepdim=True) / nonzero
+    imgs.sub_(mu).mul_(mask_4D)
+    # normalize in width and height, respectively. IM_norm shape should be (256, 100)
+    imgs_norm = imgs.pow(2).sum(dim=(2, 3))
 
-    # TPL.shape = (256, 147, 68) MASK.shape = (147, 68) -> broadcasted, TPL.shape = (256, 147, 68)
-    TPL.mul_(MASK)
-    mu_TPL = TPL.sum(dim=(1,2)) / nonzero
-    mu_TPL_3D = mu_TPL.unsqueeze(1).unsqueeze(2)
-    TPL.sub_(mu_TPL_3D).mul_(MASK)
-    # TPL_norm = torch.sum(torch.sum(TPL**2, axis=1), axis=1)
-    TPL_norm = TPL.pow(2).sum(dim=(1,2))
+    # feat.shape = (256, 147, 68) mask.shape = (147, 68) -> broadcasted, TPL.shape = (256, 147, 68)
+    feat.mul_(mask)
+    # get mean of each feature by summing over width and height and divide by "nonzero"
+    mu_feat = feat.sum(dim=(1, 2)) / nonzero
+    mu_feat = mu_feat.unsqueeze(-1).unsqueeze(-1)
+    feat.sub_(mu_feat).mul_(mask)
+    feat_norm = feat.pow(2).sum(dim=(1,2))
 
-    TPL_4D = TPL.unsqueeze(3)
-    numer = IM * TPL_4D
-    denom = (IM_norm * TPL_norm.unsqueeze(1) + 1e-5).unsqueeze(1).unsqueeze(2)
-    feat = numer / denom
-    feat.mul_(MASK.unsqueeze(0).unsqueeze(3))
+    numer = imgs * feat
+    denom = torch.sqrt(imgs_norm * feat_norm.unsqueeze(0) + 1e-5)
+    feat = numer / denom.unsqueeze(-1).unsqueeze(-1)
+    feat.mul_(mask)
     
     return feat
