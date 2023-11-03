@@ -4,6 +4,8 @@ import numpy as np
 import scipy.io as sio
 import os
 import pickle
+from tqdm import tqdm
+from itertools import product
 
 from utils_custom.get_db_attrs import get_db_attrs
 from utils_custom.warp_masks import warp_masks
@@ -110,7 +112,7 @@ def process_feat(q_feat, feat_info, h, w, offsety, offsetx, q_mask_padded, erode
 
 
 def print_msg(cnt, angles, eraseStr, pad_H, pad_W):
-    msg = f'{cnt}/{len(angles) * np.ceil((pad_H/2)+0.5) * np.ceil((pad_W/2)+0.5)}'
+    msg = f'{cnt} / {len(angles) * np.ceil((pad_H/2)+0.5) * np.ceil((pad_W/2)+0.5)}'
     if cnt % 10 == 0:
         print(eraseStr + msg, end='')
         eraseStr = '\b' * len(msg)
@@ -153,7 +155,9 @@ def alignment_search_eval_fid300(query_ind, db_ind=2):
         os.makedirs(os.path.join('results', dbname), exist_ok=True)
         
     for qidx in range(query_ind[0], query_ind[1]+1):
-        score_save_fname = os.path.join('results', dbname, f'fid300_alignment_search_ones_res_{qidx:04d}.mat')
+        # file extension is .npz
+        score_save_fname = os.path.join('results', dbname, \
+            f'fid300_alignment_search_ones_res_{qidx:04d}.npz')
         # if os.path.exists(score_save_fname):
         #     continue
         # lock_fname = score_save_fname + '.lock'
@@ -178,14 +182,12 @@ def alignment_search_eval_fid300(query_ind, db_ind=2):
         # p_mask_padded = np.pad(np.ones(q_im.shape, dtype=bool), ((pad_H, pad_H), (pad_W, pad_W), \
         #     (0, 0)), mode='constant', constant_values=0)
         
-        cnt = 0
-        eraseStr = ''
         transx = np.arange(1, pad_W+2, 2)  # Creating an array from 1 to pad_W+1 with a step of 2
         transy = np.arange(1, pad_H+2, 2)
         # Initialize scores_ones with zeros
         scores_ones = np.zeros((num_db_chunks, len(transy), len(transx), num_angles), dtype=np.float32)
         
-        for ang_idx in range(num_angles):
+        for ang_idx in tqdm(range(num_angles), desc='f{qidx}th Query Image, per angle', unit='ang'):
             ang = angles[ang_idx]
             #NOTE - Use this function for real tests
             # p_im_padded_r, p_mask_padded_r = pad_per_angle(center, p, r, p_im_padded, p_mask_padded)
@@ -196,45 +198,43 @@ def alignment_search_eval_fid300(query_ind, db_ind=2):
             q_mask_padded_ang = cv2.imread(os.path.join('results', 'resnet_4x_matlab', \
                 f'fid300_rotated_mask_{qidx:04d}_{ang:03d}.jpg'), cv2.IMREAD_GRAYSCALE)
             q_mask_padded_H, q_mask_padded_W = q_mask_padded_ang.shape
-                    
+            
             offsets_y = [0]
             if pad_H > 1:
                 offsets_y.append(2)
-            
+                
             offsets_x = [0]
             if pad_W > 1:
                 offsets_x.append(2)
 
-            for offsetx in offsets_x:
-                for offsety in offsets_y:
-                    # query_feat_off.shape = torch.Size([1, 256, 217, 84])
-                    query_feat_off = generate_db_CNNfeats_gpu(net, q_im_padded_ang[offsety:, offsetx:, :])
-                    qH, qW = query_feat_off.shape[2], query_feat_off.shape[3]
-                    h_margin = qH - feat_H
-                    w_margin = qW - feat_W
+            # use itertools.product to get all combinations of offsets_y and offsets_x
+            # for offsety in offsets_y:
+            for offsetx, offsety in product(offsetx, offsety):
+                # query_feat_off.shape = torch.Size([1, 256, 217, 84])
+                query_feat_off = generate_db_CNNfeats_gpu(net, q_im_padded_ang[offsety:, offsetx:, :])
+                qH, qW = query_feat_off.shape[2], query_feat_off.shape[3]
+                h_margin = qH - feat_H
+                w_margin = qW - feat_W
 
-                    for h in range(h_margin+1):
-                        for w in range(w_margin+1):
-                            eraseStr = print_msg(cnt, angles, eraseStr, pad_H, pad_W)
-                            
-                            pix_i = offsety + h * 4
-                            pix_j = offsetx + w * 4
-                            
-                            if pix_i + trace_H > q_mask_padded_H or \
-                            pix_j + trace_W > q_mask_padded_W:
-                                continue
-                            
-                            # The next operations are placeholders and need actual Python functions
-                            query_feat_hw, query_feat_mask_hw = process_feat(query_feat_off, feats_gen_info, h, w, \
-                                offsety, offsetx, q_mask_padded_ang, ERODE_PCT, db_ind)
-                            
-                            query_feat_mask_hw = torch.tensor(query_feat_mask_hw, dtype=torch.float32).to('cuda')
-                            
-                            # scores_cell.shape = torch.Size([100, 1, 1, 1])
-                            scores_cell = weighted_masked_NCC_features(db_chunk_feats, query_feat_hw, query_feat_mask_hw, weight_ones)  # Placeholder
-                            # scores_ones.shape = (100, 71, 17, 11)
-                            scores_ones[:, int(pix_i/2+0.5), int(pix_j/2+0.5), ang_idx] = scores_cell.squeeze()
-                            cnt += 1
+                # for h in range(h_margin+1):
+                for h, w in tqdm(product(range(h_margin+1), range(w_margin+1))):
+                    pix_i = offsety + h * 4
+                    pix_j = offsetx + w * 4
+                    
+                    if pix_i + trace_H > q_mask_padded_H or \
+                    pix_j + trace_W > q_mask_padded_W:
+                        continue
+                    
+                    # The next operations are placeholders and need actual Python functions
+                    query_feat_hw, query_feat_mask_hw = process_feat(query_feat_off, feats_gen_info, h, w, \
+                        offsety, offsetx, q_mask_padded_ang, ERODE_PCT, db_ind)
+                    
+                    query_feat_mask_hw = torch.tensor(query_feat_mask_hw, dtype=torch.float32).to('cuda')
+                    
+                    # scores_cell.shape = torch.Size([100, 1, 1, 1])
+                    scores_cell = weighted_masked_NCC_features(db_chunk_feats, query_feat_hw, query_feat_mask_hw, weight_ones)  # Placeholder
+                    # scores_ones.shape = (100, 71, 17, 11)
+                    scores_ones[:, int(pix_i/2+0.5), int(pix_j/2+0.5), ang_idx] = scores_cell.squeeze()
             
         minsONES = np.max(np.max(np.max(scores_ones, axis=1, keepdims=True), axis=2, keepdims=True), axis=3, keepdims=True)
         locaONES = scores_ones == minsONES
