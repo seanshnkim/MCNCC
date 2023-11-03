@@ -187,7 +187,7 @@ def alignment_search_eval_fid300(query_ind, db_ind=2):
         # Initialize scores_ones with zeros
         scores_ones = np.zeros((num_db_chunks, len(transy), len(transx), num_angles), dtype=np.float32)
         
-        for ang_idx in tqdm(range(num_angles), desc='f{qidx}th Query Image, per angle', unit='ang'):
+        for ang_idx in tqdm(range(num_angles), desc=f'{qidx}th Query Image, per angle', unit='ang'):
             ang = angles[ang_idx]
             #NOTE - Use this function for real tests
             # p_im_padded_r, p_mask_padded_r = pad_per_angle(center, p, r, p_im_padded, p_mask_padded)
@@ -209,7 +209,7 @@ def alignment_search_eval_fid300(query_ind, db_ind=2):
 
             # use itertools.product to get all combinations of offsets_y and offsets_x
             # for offsety in offsets_y:
-            for offsetx, offsety in product(offsetx, offsety):
+            for offsetx, offsety in product(offsets_x, offsets_y):
                 # query_feat_off.shape = torch.Size([1, 256, 217, 84])
                 query_feat_off = generate_db_CNNfeats_gpu(net, q_im_padded_ang[offsety:, offsetx:, :])
                 qH, qW = query_feat_off.shape[2], query_feat_off.shape[3]

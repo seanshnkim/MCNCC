@@ -4,5 +4,5 @@ from diff_between_pkl_mat import diff_pkl_mat
 
 # gen_feats_fid300(2)
 # preprocess_im(0,0)
-alignment_search_eval_fid300([1, 3], db_ind=2)
+alignment_search_eval_fid300([2, 5], db_ind=2)
 # diff_pkl_mat()
