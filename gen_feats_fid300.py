@@ -48,18 +48,18 @@ def preprocess_im(img_path, num_img, scale, fixed_h, pad_val):
     return ims_4D, trace_H, trace_W
 
 
-def save_feats_fid300(dbname, db_feats_info, save_combined=True):
+def save_feats_fid300(dbname, db_feats_combined, save_combined=True):
     feats_path = os.path.join('feats', dbname)
     os.makedirs(feats_path, exist_ok=True)
     
     feats_gen_info = os.path.join(feats_path, 'fid300_feat_info.pkl')
     with open(feats_gen_info, 'wb') as file:
         pickle.dump({
-            'feat_dims': db_feats_info['feat_dims'],
-            'receptive_fields': db_feats_info['receptive_fields'],
-            'trace_H': db_feats_info['trace_H'],
-            'trace_W': db_feats_info['trace_W'],
-            'data_type': db_feats_info['data_type']
+            'feat_dims': db_feats_combined['feat_dims'],
+            'receptive_fields': db_feats_combined['receptive_fields'],
+            'trace_H': db_feats_combined['trace_H'],
+            'trace_W': db_feats_combined['trace_W'],
+            'data_type': db_feats_combined['data_type']
             }, file)
 
     # save all_db_feats
@@ -68,14 +68,14 @@ def save_feats_fid300(dbname, db_feats_info, save_combined=True):
         
         if not os.path.exists(feats_all_path):
             with open(feats_all_path, 'wb') as file:
-                pickle.dump(db_feats_info, file)
+                pickle.dump(db_feats_combined, file)
                 
     # save each db_feats into separate file
     else:
-        assert NUM_REF_IMAGE == db_feats_info['db_feats'].shape[0]
+        assert NUM_REF_IMAGE == db_feats_combined['db_feats'].shape[0]
         for i in range(NUM_REF_IMAGE):
-            db_feats = db_feats_info['db_feats'][i, :, :, :]
-            db_labels = db_feats_info['db_labels'][:, :, :, i]
+            db_feats = db_feats_combined['db_feats'][i, :, :, :]
+            db_labels = db_feats_combined['db_labels'][:, :, :, i]
             feats_each_path = os.path.join(feats_path, f'fid300_{i+1:03d}.pkl')
             
             if not os.path.exists(feats_each_path):
@@ -143,7 +143,7 @@ def gen_feats_fid300(db_ind=2):
     feat_dims = all_db_feats.shape
     rf = get_receptive_fields(net.model[0])
     
-    db_feats_info = {
+    db_feats_info_comb = {
         'db_feats': all_db_feats,
         'db_labels': all_db_labels,
         'feat_dims': feat_dims,
@@ -152,4 +152,4 @@ def gen_feats_fid300(db_ind=2):
         'trace_W': trace_W,
         'data_type': all_db_feats.dtype
     }
-    save_feats_fid300(dbname, db_feats_info, save_combined=True)
+    save_feats_fid300(dbname, db_feats_info_comb, save_combined=True)
