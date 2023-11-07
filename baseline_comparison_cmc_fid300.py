@@ -2,6 +2,7 @@ import numpy as np
 import pickle
 import os
 import pandas as pd
+import scipy.io as sio
 
 from utils_custom.get_db_attrs import get_db_attrs
 
@@ -13,11 +14,7 @@ def basel_compare_cmc_latent_masked(db_ind=2):
     """Compares the CMC of different methods on the FID-300 dataset."""
     _, db_chunk_inds, dbname = get_db_attrs('fid300', db_ind, {'suffix'})
     start_idx, end_idx = db_chunk_inds[0]
-    
-    db_labels = np.zeros(end_idx-start_idx, dtype=np.int32)
-    for idx in range(start_idx, end_idx):
-        feat_path = os.path.join('feats', dbname, f'fid300_{idx:03d}.pkl')
-        db_labels[idx-1] = int(pickle.load(open(feat_path, 'rb'))['db_labels'].item())
+    NUM_REF = end_idx - start_idx
     
     label_path = os.path.join('datasets', 'FID-300', 'label_table.csv')
     label_table = pd.read_csv(label_path)
@@ -25,8 +22,8 @@ def basel_compare_cmc_latent_masked(db_ind=2):
     ncc_cmc = np.zeros(NUM_REF, dtype=np.float32)
     for qidx in range(NUM_QUERIES):
         score_save_fname = os.path.join('results', dbname, f'fid300_alignment_search_ones_res_{qidx:04d}.npz')
-        with np.load(score_save_fname) as data:
-            minsONES = data['minsONES']
+        with np.load(score_save_fname) as scores:
+            minsONES = scores['minsONES']
 
         query_label = label_table[label_table['query_idx'] == qidx]['query_label'].values[0]
 
@@ -34,23 +31,22 @@ def basel_compare_cmc_latent_masked(db_ind=2):
         inds = np.argsort(minsONES.flatten(), kind='stable')[::-1]
         ncc_cmc += np.cumsum(inds == query_label)
 
-    ncc_cmc = ncc_cmc / 300 * 100
+    ncc_cmc = ncc_cmc / NUM_QUERIES * 100
 
     baselines = ['datasets/FID-300/result_ACCV14.mat', 'datasets/FID-300/ranks_BMVC16.mat', 'datasets/FID-300/ranks_LoG16.mat']
-    base_cmc = np.zeros((len(baselines), 1175), dtype=np.float32)
+    base_cmc = np.zeros((len(baselines), NUM_REF), dtype=np.float32)
     for b in range(len(baselines)):
-        ...
-#         with open(baselines[b], 'rb') as f:
-#         ranks = pickle.load(f)['ranks']
+        with open(baselines[b], 'rb') as f:
+            ranks = sio.loadmat(f)['ranks']
 
-#         for p in range(300):
-#         res = np.zeros(1175, dtype=np.bool_)
-#         res[ranks[p]] = True
-#         base_cmc[b] += np.cumsum(res)
+        for p in range(NUM_QUERIES):
+            res = np.zeros(NUM_REF, dtype=np.bool_)
+            res[ranks[p]] = True
+            base_cmc[b] += np.cumsum(res)
 
-#         base_cmc[b] = base_cmc[b] / 300 * 100
+            base_cmc[b] = base_cmc[b] / NUM_QUERIES * 100
 
-#     return ncc_cmc, base_cmc
+    return ncc_cmc, base_cmc
 
 
 # if __name__ == '__main__':
