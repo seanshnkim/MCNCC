@@ -15,7 +15,8 @@ load(fullfile('datasets', 'FID-300', 'label_table.mat'), 'label_table')
 
 
 ncc_cmc = zeros(1, 1175);
-for p=1:300
+% tentative. should be p=1:1175
+for p=1:1
   % load patch results
   fname = fullfile('results', dbname, sprintf('fid300_alignment_search_ones_res_%04d.mat', p));
   load(fname, 'minsONES')
@@ -23,7 +24,7 @@ for p=1:300
   query_label = label_table(p, 2);
 
   % NCC
-  [~, inds] = sort(minsONES(:), 'descend');
+  [~, inds] = sort(minsONES(:, :), 'descend');
   assert(numel(inds)==1175);
   ncc_cmc = ncc_cmc+cumsum(inds==query_label);
 end
@@ -36,8 +37,9 @@ baselines = {'datasets/FID-300/result_ACCV14.mat', ...
 base_cmc = zeros(numel(baselines), 1175);
 for b=1:numel(baselines)
   load(baselines{b}, 'ranks')
-
-  for p=1:300
+  
+  % tentative. should be p=1:1175
+  for p=1:1
     res = zeros(1, 1175);
     res(ranks(p)) = 1;
     base_cmc(b, :) = base_cmc(b, :)+cumsum(res);
@@ -48,7 +50,7 @@ end
 
 set(0, 'DefaultAxesFontName', 'Times New Roman')
 set(0, 'DefaultTextFontname', 'Times New Roman')
-font_size = 48;
+font_size = 10;
 line_width = 6;
 
 colors = get(gca, 'colororder');
@@ -58,7 +60,7 @@ for b=1:numel(baselines)
        'LineWidth', line_width, ...
        'Color', colors(b, :))
 end
-plot([1:1175]./1175.*100, ncc_cmc{1}, ...
+plot([1:1175]./1175.*100, ncc_cmc, ...
      'LineWidth', line_width, ...
      'Color', colors(numel(baselines)+1, :))
 hold off
