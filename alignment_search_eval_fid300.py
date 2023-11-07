@@ -6,6 +6,8 @@ import os
 import pickle
 from tqdm import tqdm
 from itertools import product
+import time
+import logging
 
 from utils_custom.get_db_attrs import get_db_attrs
 from utils_custom.warp_masks import warp_masks
@@ -153,7 +155,10 @@ def alignment_search_eval_fid300(query_ind, db_ind=2):
     
     if not os.path.exists(os.path.join('results', dbname)):
         os.makedirs(os.path.join('results', dbname), exist_ok=True)
-        
+    
+    logging.basicConfig(filename=os.path.join('results', dbname, 'fid300_alignment_search_ones_res.log'), \
+        level=logging.INFO, format='%(asctime)s - %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p')
+    
     for qidx in range(query_ind[0], query_ind[1]+1):
         # file extension is .npz
         score_save_fname = os.path.join('results', dbname, \
@@ -167,6 +172,8 @@ def alignment_search_eval_fid300(query_ind, db_ind=2):
         # if the file does not exist, a+ option creates it ('a' option assumes the file exists)
         # fid = open(lock_fname, 'a+')
         # fid.write(f'p={time.time()}')
+        
+        start_time = time.time()
         
         query_im_fname = os.path.join('datasets', 'FID-300', 'tracks_cropped', f'{qidx:05d}.jpg')
         q_im = preprocess_query_im(query_im_fname, IMSCALE, trace_H, trace_W)
@@ -239,6 +246,10 @@ def alignment_search_eval_fid300(query_ind, db_ind=2):
         minsONES = np.max(np.max(np.max(scores_ones, axis=1, keepdims=True), axis=2, keepdims=True), axis=3, keepdims=True)
         locaONES = scores_ones == minsONES
         np.savez(score_save_fname, scores_ones, minsONES, locaONES)
+        
+        end_time = time.time()
+        elapsed_time = end_time - start_time
+        logging.info(f"Query {qidx:03d} image took {elapsed_time:.2f} seconds.")
 
         # fid.close()
         # os.remove(lock_fname)

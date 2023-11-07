@@ -23,7 +23,7 @@ for p=1:1
   query_label = label_table(p, 2);
 
   % NCC
-  [~, inds] = sort(minsONES(:), 'descend');
+  [~, inds] = sort(minsONES(:, :), 'descend');
   assert(numel(inds)==1175);
   ncc_cmc = ncc_cmc+cumsum(inds==query_label);
 end
