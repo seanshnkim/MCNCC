@@ -65,8 +65,18 @@ def preprocess_query_im(fname, imscale, trace_H, trace_W):
 
 
 
-def pad_per_angle(center, p_idx, angle, p_im_padded, p_mask_padded):
-    rows, cols, _ = p_im_padded.shape
+def pad_img_mask(q_im, pad_H, pad_W):
+    # Padding: q_im.shape = (H, W, 3) -> 3D. In MATLAB code, it is 2D
+    q_im_padded = np.pad(q_im, ((pad_H, pad_H), (pad_W, pad_W), (0,0)), \
+    mode='constant', constant_values=255)
+    q_mask_padded = np.pad(np.ones(q_im.shape, dtype=bool), ((pad_H, pad_H), (pad_W, pad_W), \
+    (0, 0)), mode='constant', constant_values=0)
+    
+    return q_im_padded, q_mask_padded
+
+
+def rotate_img_mask(angle, q_im_padded, q_mask_padded):
+    _, rows, cols = q_im_padded.shape
     center = (cols / 2, rows / 2)
         
     # Creating rotation matrices
@@ -74,14 +84,15 @@ def pad_per_angle(center, p_idx, angle, p_im_padded, p_mask_padded):
     rot_mat_mask = cv2.getRotationMatrix2D(center, angle, 1)
     
     # Rotating images
-    p_im_padded_r = cv2.warpAffine(p_im_padded, rot_mat_im, (cols, rows), \
+    q_im_padded_ang = cv2.warpAffine(q_im_padded, rot_mat_im, (cols, rows), \
         flags=cv2.INTER_CUBIC, borderMode=cv2.BORDER_CONSTANT, borderValue=(255, 255, 255))
     
     # To prevent cv::UMat format error, we need to convert p_mask_padded to float32 numpy array
-    p_mask_padded_r = cv2.warpAffine(np.float32(p_mask_padded), rot_mat_mask, (cols, rows), \
+    q_mask_padded_ang = cv2.warpAffine(np.float32(q_mask_padded), rot_mat_mask, (cols, rows), \
         flags=cv2.INTER_NEAREST, borderMode=cv2.BORDER_CONSTANT, borderValue=0)
     
-    return p_im_padded_r, p_mask_padded_r
+    return q_im_padded_ang, q_mask_padded_ang
+
 
 
 
@@ -149,7 +160,8 @@ def alignment_search_eval_fid300(query_ind, db_ind=2):
     weight_ones = torch.ones((num_k, feat_out_ch, ksize, ksize), dtype=torch.float32).cuda()
     
     # db_feats.shape = (1175, 256, 147, 68)
-    db_chunk_feats = load_db_chunk_feats(feat_dims, data_type, db_chunk_inds, dbname)
+    # If load_combined=True, load all 1175 reference images.
+    db_chunk_feats = load_db_chunk_feats(feat_dims, data_type, db_chunk_inds, dbname, load_combined=True)
     db_chunk_feats = torch.tensor(db_chunk_feats, dtype=torch.float32).to('cuda')
     num_db_chunks = db_chunk_feats.shape[0]
     
@@ -160,7 +172,6 @@ def alignment_search_eval_fid300(query_ind, db_ind=2):
         level=logging.INFO, format='%(asctime)s - %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p')
     
     for qidx in range(query_ind[0], query_ind[1]+1):
-        # file extension is .npz
         score_save_fname = os.path.join('results', dbname, \
             f'fid300_alignment_search_ones_res_{qidx:04d}.npz')
         # if os.path.exists(score_save_fname):
@@ -181,28 +192,25 @@ def alignment_search_eval_fid300(query_ind, db_ind=2):
         pad_H = trace_H - q_im.shape[0]
         pad_W = trace_W - q_im.shape[1]
         assert pad_H >= 0 and pad_W >= 0, f'pad_H={pad_H}, pad_W={pad_W}'
+        # pad query images and masks
+        # q_im_padded, q_mask_padded = pad_img_mask(q_im, pad_H, pad_W)
         
-        # Padding: q_im.shape = (H, W, 3) -> 3D. In MATLAB code, it is 2D.
-        #NOTE - do not remove the code below -> it is used later
-        # p_im_padded = np.pad(q_im, ((pad_H, pad_H), (pad_W, pad_W), (0,0)), \
-        #     mode='constant', constant_values=255)
-        # p_mask_padded = np.pad(np.ones(q_im.shape, dtype=bool), ((pad_H, pad_H), (pad_W, pad_W), \
-        #     (0, 0)), mode='constant', constant_values=0)
-        
-        transx = np.arange(1, pad_W+2, 2)  # Creating an array from 1 to pad_W+1 with a step of 2
+        # transx, transy means translation in x and y direction, respectively / scores_ones = score vector
+        transx = np.arange(1, pad_W+2, 2)
         transy = np.arange(1, pad_H+2, 2)
-        # Initialize scores_ones with zeros
         scores_ones = np.zeros((num_db_chunks, len(transy), len(transx), num_angles), dtype=np.float32)
+        
+        save_dir_qidx = os.path.join('results', 'resnet_4x_matlab', f'{qidx:04d}')
         
         for ang_idx in tqdm(range(num_angles), desc=f'{qidx}th Query Image, per angle', unit='ang'):
             ang = angles[ang_idx]
             #NOTE - Use this function for real tests
-            # p_im_padded_r, p_mask_padded_r = pad_per_angle(center, p, r, p_im_padded, p_mask_padded)
+            # q_im_padded_ang, q_mask_padded_ang = rotate_img_mask(ang, q_im_padded, q_mask_padded)
             
             # Just load images created in MATLAB code for test (tentative approach)
-            q_im_padded_ang = cv2.imread(os.path.join('results', 'resnet_4x_matlab', \
+            q_im_padded_ang = cv2.imread(os.path.join(save_dir_qidx, \
                 f'fid300_rotated_im_{qidx:04d}_{ang:03d}.jpg'), cv2.IMREAD_COLOR)
-            q_mask_padded_ang = cv2.imread(os.path.join('results', 'resnet_4x_matlab', \
+            q_mask_padded_ang = cv2.imread(os.path.join(save_dir_qidx, \
                 f'fid300_rotated_mask_{qidx:04d}_{ang:03d}.jpg'), cv2.IMREAD_GRAYSCALE)
             q_mask_padded_H, q_mask_padded_W = q_mask_padded_ang.shape
             
@@ -245,7 +253,7 @@ def alignment_search_eval_fid300(query_ind, db_ind=2):
             
         minsONES = np.max(np.max(np.max(scores_ones, axis=1, keepdims=True), axis=2, keepdims=True), axis=3, keepdims=True)
         locaONES = scores_ones == minsONES
-        np.savez(score_save_fname, scores_ones, minsONES, locaONES)
+        np.savez(score_save_fname, scores=scores_ones, mins_ones=minsONES, loca_ones=locaONES)
         
         end_time = time.time()
         elapsed_time = end_time - start_time
