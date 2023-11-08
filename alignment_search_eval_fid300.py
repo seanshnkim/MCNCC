@@ -111,13 +111,20 @@ def process_feat(q_feat, feat_info, h, w, offsety, offsetx, q_mask_padded, erode
     pix_j = offsetx + w * 4
     
     # feat_dims = (batch_size=1175, out_channel_size=256, height=147, width=68)
+    # q_mask_padded.shape = (404, 179) -> crop to (trace_H, trace_W)
     q_mask_pix = q_mask_padded[pix_i:pix_i+trace_H, pix_j:pix_j+trace_W]
+    # After crop, q_mask_pix.shape = feat_dims(147, 68)
     q_mask_pix = warp_masks(q_mask_pix, im_f2i, feat_dims, db_ind) # Placeholder
+    # After warp, no dimension change. q_mask_pix.shape = feat_dims (147, 68)
     q_mask_pix = cv2.copyMakeBorder(q_mask_pix, radius, radius, radius, radius, cv2.BORDER_CONSTANT, value=0)
+    # se = np.ones((radius, radius)). radius = 6
+    # After eroding, q_mask_pix.shape = 
+    # (q_mask_pix.shape[0]+radius*2 = 159, q_mask_pix.shape[1]+radius*2 = 80)
     q_mask_pix = cv2.erode(q_mask_pix, se)
+    # q_mask_pix.shape comes back to (147, 68)
     q_mask_pix = q_mask_pix[radius:-radius, radius:-radius]
     
-    #REVIEW: torch.Size([1, 147, 217, 84]) -> squeeze to torch.Size([out_ch=256, height=147, width=68])
+    #REVIEW: torch.Size([1, 147, 217, 84]) -> crop and squeeze to torch.Size([out_ch=256, height=147, width=68])
     q_feat_hw = q_feat[:, :, h:h+feat_H, w:w+feat_W].squeeze(0)
     
     return q_feat_hw, q_mask_pix
@@ -161,7 +168,7 @@ def alignment_search_eval_fid300(query_ind, db_ind=2):
     
     # db_feats.shape = (1175, 256, 147, 68)
     # If load_combined=True, load all 1175 reference images.
-    db_chunk_feats = load_db_chunk_feats(feat_dims, data_type, db_chunk_inds, dbname, load_combined=True)
+    db_chunk_feats = load_db_chunk_feats(feat_dims, data_type, db_chunk_inds, dbname)
     db_chunk_feats = torch.tensor(db_chunk_feats, dtype=torch.float32).to('cuda')
     num_db_chunks = db_chunk_feats.shape[0]
     
@@ -174,15 +181,6 @@ def alignment_search_eval_fid300(query_ind, db_ind=2):
     for qidx in range(query_ind[0], query_ind[1]+1):
         score_save_fname = os.path.join('results', dbname, \
             f'fid300_alignment_search_ones_res_{qidx:04d}.npz')
-        # if os.path.exists(score_save_fname):
-        #     continue
-        # lock_fname = score_save_fname + '.lock'
-        # if os.path.exists(lock_fname):
-        #     continue
-        
-        # if the file does not exist, a+ option creates it ('a' option assumes the file exists)
-        # fid = open(lock_fname, 'a+')
-        # fid.write(f'p={time.time()}')
         
         start_time = time.time()
         
@@ -249,6 +247,7 @@ def alignment_search_eval_fid300(query_ind, db_ind=2):
                     # scores_cell.shape = torch.Size([100, 1, 1, 1])
                     scores_cell = weighted_masked_NCC_features(db_chunk_feats, query_feat_hw, query_feat_mask_hw, weight_ones)  # Placeholder
                     # scores_ones.shape = (100, 71, 17, 11)
+                    
                     scores_ones[:, int(pix_i/2+0.5), int(pix_j/2+0.5), ang_idx] = scores_cell.squeeze()
             
         minsONES = np.max(np.max(np.max(scores_ones, axis=1, keepdims=True), axis=2, keepdims=True), axis=3, keepdims=True)
@@ -257,7 +256,6 @@ def alignment_search_eval_fid300(query_ind, db_ind=2):
         
         end_time = time.time()
         elapsed_time = end_time - start_time
-        logging.info(f"Query {qidx:03d} image took {elapsed_time:.2f} seconds.")
-
-        # fid.close()
-        # os.remove(lock_fname)
+        # Change it into hour, min, sec format
+        elapsed_time = time.strftime("%H:%M:%S", time.gmtime(elapsed_time))
+        logging.info(f"Query {qidx:03d} image took {elapsed_time} seconds.")
