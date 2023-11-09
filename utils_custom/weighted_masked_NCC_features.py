@@ -57,7 +57,7 @@ def masked_NCC_features(imgs, feat, mask):
     # get mean of each image by summing over width and height and divide by "nonzero"
     mu = torch.mean(imgs, dim=(2,3), keepdim=True) / nonzero
     imgs.sub_(mu).mul_(mask_4D)
-    # normalize in width and height, respectively. IM_norm shape should be (256, 100)
+    # normalize in width and height, respectively. imgs_norm shape should be (256, 100)
     imgs_norm = imgs.pow(2).sum(dim=(2, 3))
 
     # feat.shape = (channels=256, height=147, width=68) mask.shape = (147, 68)
@@ -69,8 +69,11 @@ def masked_NCC_features(imgs, feat, mask):
     feat_norm = feat.pow(2).sum(dim=(1,2))
 
     numer = imgs * feat
+    # NaN or inf value may occur if the denominator is zero -> 1e-5 is added to avoid this
     denom = torch.sqrt(imgs_norm * feat_norm.unsqueeze(0) + 1e-5)
+    
     feat = numer / denom.unsqueeze(-1).unsqueeze(-1)
+        
     feat.mul_(mask)
     
     return feat

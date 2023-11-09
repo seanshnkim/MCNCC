@@ -249,8 +249,12 @@ def alignment_search_eval_fid300(query_ind, db_ind=2):
                     # scores_ones.shape = (100, 71, 17, 11)
                     
                     scores_ones[:, int(pix_i/2+0.5), int(pix_j/2+0.5), ang_idx] = scores_cell.squeeze()
-            
+                    
+        # scores_ones.shape: (batch_size, 71, 17, 11)
+        # minsONES.shape: (batch_size, 1, 1, 1)
+        # batch_size can be either 100, 200, or 1175 (depends on what you choose)
         minsONES = np.max(np.max(np.max(scores_ones, axis=1, keepdims=True), axis=2, keepdims=True), axis=3, keepdims=True)
+        # scores['loca_ones'].shape: (batch_size, 71, 17, 11)
         locaONES = scores_ones == minsONES
         np.savez(score_save_fname, scores=scores_ones, mins_ones=minsONES, loca_ones=locaONES)
         

@@ -8,6 +8,8 @@ import time
 import logging
 
 from utils_custom.get_db_attrs import get_db_attrs
+from utils_custom.feat_2_image import feat_2_image
+from utils_custom.warp_masks import warp_masks
 from utils_custom.weighted_masked_NCC_features_no_align import weighted_masked_NCC_features
 from modified_network import ResNet50Encoder
 from generate_db_CNNfeats_gpu import generate_db_CNNfeats_gpu
@@ -65,10 +67,66 @@ def pad_img_mask(q_im, pad_H, pad_W):
     # Padding: q_im.shape = (H, W, 3) -> 3D. In MATLAB code, it is 2D
     q_im_padded = np.pad(q_im, ((pad_H, pad_H), (pad_W, pad_W), (0,0)), \
     mode='constant', constant_values=255)
-    q_mask_padded = np.pad(np.ones(q_im.shape, dtype=bool), ((pad_H, pad_H), (pad_W, pad_W), \
-    (0, 0)), mode='constant', constant_values=0)
+    q_mask_padded = np.pad(np.ones(q_im.shape[0:2], dtype=float), \
+        ((pad_H, pad_H), (pad_W, pad_W)), mode='constant', constant_values=0)
     
     return q_im_padded, q_mask_padded
+
+
+
+def center_crop(img_numpy, new_H, new_W, is_mask=False):
+    if is_mask:
+        assert len(img_numpy.shape) == 2
+        img_H, img_W = img_numpy.shape
+    else:
+        if len(img_numpy.shape) == 4:
+            img_numpy = img_numpy.squeeze(0)
+        
+        _, img_H, img_W = img_numpy.shape
+            
+    
+    margin_H = img_H - new_H
+    margin_W = img_W - new_W
+    assert margin_H >= 0 and margin_W >= 0
+    
+    top = int(np.ceil((img_H - new_H) / 2))
+    bottom = top + new_H
+    
+    left = int(np.ceil((img_W - new_W) / 2))
+    right = left + new_W
+    
+    if len(img_numpy.shape) == 2: 
+        center_cropped_img = img_numpy[top:bottom, left:right]
+    elif len(img_numpy.shape) == 3:
+        center_cropped_img = img_numpy[:, top:bottom, left:right]
+    else:
+        raise ValueError(f'img_numpy.shape = {img_numpy.shape}')
+    
+    return center_cropped_img
+    
+
+
+def process_feat(q_feat, feat_info, q_mask, erode_pct, db_ind):
+    feat_dims = feat_info['feat_dims']
+    rfsIm = feat_info['receptive_fields']
+    trace_H = feat_info['trace_H']
+    trace_W = feat_info['trace_W']
+    feat_H, feat_W = feat_dims[2], feat_dims[3]
+    
+    im_f2i = feat_2_image(rfsIm)
+    radius = int(max(1, np.floor(min(feat_H, feat_W) * erode_pct)))
+    se = np.ones((radius, radius))
+    
+    
+    q_mask_cropped = center_crop(q_mask, trace_H, trace_W, is_mask=True)
+    q_mask_processed = warp_masks(q_mask_cropped, im_f2i, feat_dims, db_ind)
+    q_mask_processed = cv2.copyMakeBorder(q_mask_processed, radius, radius, radius, radius, cv2.BORDER_CONSTANT, value=0)
+    q_mask_processed = cv2.erode(q_mask_processed, se)
+    q_mask_processed = q_mask_processed[radius:-radius, radius:-radius]
+    
+    q_feat_cropped = center_crop(q_feat, feat_H, feat_W)
+    
+    return q_feat_cropped, q_mask_processed
 
 
 
@@ -122,13 +180,13 @@ def eval_fid300(query_ind, db_ind=2):
 
         q_im_padded, q_mask_padded = pad_img_mask(q_im, pad_H, pad_W)
         query_feat = generate_db_CNNfeats_gpu(net, q_im_padded)
+        # query_feat.shape = (1, 256, 202, 90). q_mask_padded.shape = (404, 180, 3)
+        query_feat, q_mask_padded = process_feat(query_feat, feats_gen_info, q_mask_padded, ERODE_PCT, db_ind)
         q_mask_padded = torch.tensor(q_mask_padded, dtype=torch.float32).to('cuda')
         
         scores_ones = weighted_masked_NCC_features(db_chunk_feats, query_feat, q_mask_padded, weight_ones)  # Placeholder
             
-        minsONES = np.max(np.max(np.max(scores_ones, axis=1, keepdims=True), axis=2, keepdims=True), axis=3, keepdims=True)
-        locaONES = scores_ones == minsONES
-        np.savez(score_save_fname, scores=scores_ones, mins_ones=minsONES, loca_ones=locaONES)
+        np.savez(score_save_fname, scores=scores_ones)
         
     end_time = time.time()
     # Change it into hour, min, sec format
