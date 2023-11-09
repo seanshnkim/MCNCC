@@ -166,9 +166,14 @@ def eval_fid300(query_ind, db_ind=2):
         level=logging.INFO, format='%(asctime)s - %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p')
     
     for qidx in range(query_ind[0], query_ind[1]+1):
-        start_time = time.time()
         score_save_fname = os.path.join('results', new_dbname, \
             f'fid300_ones_res_{qidx:04d}.npz')
+        
+        # if file exists
+        if os.path.exists(score_save_fname):
+            continue
+        
+        start_time = time.time()
         
         query_im_fname = os.path.join('datasets', 'FID-300', 'tracks_cropped', f'{qidx:05d}.jpg')
         q_im = preprocess_query_im(query_im_fname, IMSCALE, trace_H, trace_W)
@@ -189,6 +194,5 @@ def eval_fid300(query_ind, db_ind=2):
         
         end_time = time.time()
         # Change it into hour, min, sec format
-        elapsed_time = time.strftime("%H:%M:%S", time.gmtime(end_time - start_time))
-        logging.info(f"Query {qidx:03d} image took {elapsed_time} seconds.")
+        logging.info(f"Query {qidx:03d} image took {end_time - start_time} seconds.")
         
