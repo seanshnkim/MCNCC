@@ -45,9 +45,9 @@ def preprocess_query_im(fname, imscale, trace_H, trace_W):
     
     # Fix latent prints are bigger than the test impressions
     if height > width and height > trace_H:
-        query_im_resized = cv2.resize(query_im_resized, (trace_H, int((trace_H / height) * width)))
+        query_im_resized = cv2.resize(query_im_resized, (int((trace_H / height) * width), trace_H) )
     elif width >= height and width > trace_W:
-        query_im_resized = cv2.resize(query_im_resized, (int((trace_W / width) * height), trace_W))
+        query_im_resized = cv2.resize(query_im_resized, (trace_W, int((trace_W / width) * height)))
     
     height, width = query_im_resized.shape
     # Subtract mean_im_pix from p_im
@@ -139,7 +139,6 @@ def eval_fid300(query_ind, db_ind=2):
     #FIXME - Since it takes too long to test with entire data, use only 100 chunks
     #NOTE: This is original code: 
     db_chunk_inds = db_chunks[0]
-    db_chunk_inds = (1, 101)
     
     net = ResNet50Encoder(db_ind=2, db_attr=db_attr)
     
@@ -156,7 +155,7 @@ def eval_fid300(query_ind, db_ind=2):
     
     # db_feats.shape = (1175, 256, 147, 68)
     # If load_combined=True, load all 1175 reference images.
-    db_chunk_feats = load_db_chunk_feats(feat_dims, data_type, db_chunk_inds, dbname)
+    db_chunk_feats = load_db_chunk_feats(feat_dims, data_type, db_chunk_inds, dbname, load_combined=True)
     db_chunk_feats = torch.tensor(db_chunk_feats, dtype=torch.float32).to('cuda')
     
     new_dbname = 'resnet_4x_no_align'
