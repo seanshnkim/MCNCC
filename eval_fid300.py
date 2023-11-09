@@ -165,8 +165,8 @@ def eval_fid300(query_ind, db_ind=2):
     logging.basicConfig(filename=os.path.join('results', new_dbname, 'fid300_ones_res.log'), \
         level=logging.INFO, format='%(asctime)s - %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p')
     
-    start_time = time.time()
     for qidx in range(query_ind[0], query_ind[1]+1):
+        start_time = time.time()
         score_save_fname = os.path.join('results', new_dbname, \
             f'fid300_ones_res_{qidx:04d}.npz')
         
@@ -187,7 +187,8 @@ def eval_fid300(query_ind, db_ind=2):
             
         np.savez(score_save_fname, scores=scores_ones)
         
-    end_time = time.time()
-    # Change it into hour, min, sec format
-    elapsed_time = time.strftime("%H:%M:%S", time.gmtime(end_time - start_time))
-    logging.info(f"Query {qidx:03d} image took {elapsed_time} seconds.")
+        end_time = time.time()
+        # Change it into hour, min, sec format
+        elapsed_time = time.strftime("%H:%M:%S", time.gmtime(end_time - start_time))
+        logging.info(f"Query {qidx:03d} image took {elapsed_time} seconds.")
+        
